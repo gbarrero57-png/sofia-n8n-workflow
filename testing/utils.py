@@ -111,6 +111,7 @@ def get_execution_details(exec_id: str) -> Optional[Dict[str, Any]]:
         response = requests.get(
             api_url,
             headers={"X-N8N-API-KEY": N8N_API_KEY},
+            params={"includeData": "true"},
             timeout=API_TIMEOUT
         )
 

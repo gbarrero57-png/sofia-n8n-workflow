@@ -1,0 +1,488 @@
+{
+  "name": "Sofia",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "chatwoot-sofia",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-chatwoot",
+      "name": "Chatwoot Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        208,
+        304
+      ],
+      "webhookId": "chatwoot-sofia"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================\n// VALIDAR INPUT + DETECTAR CONTACTO NUEVO\n// ============================================\nconst payload = $input.item.json.body || $input.item.json;\n\n// Campos del evento\nconst event = payload.event;\nconst content = payload.content;\nconst conversation_id = payload.conversation?.id;\nconst inbox_id = payload.conversation?.inbox_id;\nconst clinic_id = payload.conversation?.custom_attributes?.clinic_id;\nconst patient_id = payload.conversation?.custom_attributes?.patient_id;\nconst contact_phone = payload.conversation?.contact_inbox?.source_id;\nconst contact_id = payload.sender?.id;\nconst channel_type = payload.conversation?.contact_inbox?.inbox?.channel_type;\nconst account_id = payload.account?.id || 2;\nconst message_type = payload.message_type;\nconst created_at = payload.created_at;\n\n// ---- Validar evento ----\nif (!event || !content) {\n  throw new Error(`Missing event or content`);\n}\n\n// ---- Ignorar eventos que no son mensajes ----\nif (event !== 'message_created') {\n  throw new Error(`Ignored event: ${event}`);\n}\n\n// ---- Ignorar mensajes de tipo outgoing (evitar loops) ----\nif (message_type !== 'incoming') {\n  throw new Error(`Ignored: not incoming message (type: ${message_type})`);\n}\n\n// ---- Detectar si es contacto nuevo sin contact_inbox ----\nconst contact_inboxes = payload.conversation?.contact_inbox;\nconst has_contact_inbox = !!contact_inboxes;\n\n// Obtener contador de interacciones bot\nconst bot_count = payload.conversation?.custom_attributes?.bot_interaction_count || 0;\nconst last_bot_message = payload.conversation?.custom_attributes?.last_bot_message_at;\n\nreturn [{\n  json: {\n    message_text: (content || '').trim(),\n    conversation_id: conversation_id,\n    inbox_id: inbox_id,\n    inbox_id_api: 2,\n    inbox_id_db: 3,\n    clinic_id: clinic_id || 'default',\n    patient_id: patient_id,\n    contact_phone: contact_phone,\n    contact_id: contact_id,\n    account_id: account_id,\n    message_type: message_type,\n    message_timestamp: created_at,\n    bot_interaction_count: bot_count,\n    last_bot_message_at: last_bot_message,\n    sender_name: payload.sender?.name || 'Paciente',\n    sender_email: payload.sender?.email,\n    conversation_status: payload.conversation?.status,\n    has_contact_inbox: has_contact_inbox,\n    channel_type: channel_type || 'Channel::WebWidget',\n    raw_payload: payload\n  }\n}];"
+      },
+      "id": "code-validate",
+      "name": "Validar Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.message_type }}",
+              "operation": "equal",
+              "value2": "incoming"
+            }
+          ]
+        }
+      },
+      "id": "if-is-user",
+      "name": "Â¿Es del Usuario?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        608,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================\n// WHATSAPP SAFE RULES - FASE 1\n// ============================================\nconst bot_count = $json.bot_interaction_count || 0;\nconst message_lower = ($json.message_text || '').toLowerCase();\n\n// Regla 1: MÃ¡ximo 1 interacciÃ³n automÃ¡tica en Fase 1\nif (bot_count >= 1) {\n  return [{\n    json: {\n      ...$json,\n      should_escalate: true,\n      escalation_reason: 'MAX_INTERACTIONS_PHASE1',\n      escalation_message: 'Te conecto con un agente de inmediato.'\n    }\n  }];\n}\n\n// Regla 2: Mensaje > 24h\nconst message_age_hours = (Date.now() - ($json.message_timestamp * 1000)) / (1000 * 60 * 60);\nif (message_age_hours > 24) {\n  return [{\n    json: {\n      ...$json,\n      should_escalate: true,\n      escalation_reason: 'MESSAGE_TOO_OLD',\n      escalation_message: 'Te conecto con un agente.'\n    }\n  }];\n}\n\n// Regla 3: Horario comercial (Lima, Peru)\nconst now = new Date();\nconst lima_hour = parseInt(now.toLocaleString('en-US', { \n  timeZone: 'America/Lima', \n  hour: 'numeric', \n  hour12: false \n}));\n\nif (lima_hour < 8 || lima_hour >= 22) {\n  return [{\n    json: {\n      ...$json,\n      should_escalate: true,\n      escalation_reason: 'OUTSIDE_BUSINESS_HOURS',\n      escalation_message: 'Gracias por escribirnos. Te responderemos en horario de atenciÃ³n (8am - 10pm).'\n    }\n  }];\n}\n\n// Regla 4: Emergencias\nconst emergency_keywords = [\n  'emergencia', 'urgencia', 'dolor fuerte', 'sangra', 'mucho dolor',\n  'me caÃ­', 'golpe', 'accidente', 'no puedo', 'ayuda urgente',\n  'hinchazÃ³n', 'infecciÃ³n', 'fiebre'\n];\nconst is_emergency = emergency_keywords.some(kw => message_lower.includes(kw));\n\nif (is_emergency) {\n  return [{\n    json: {\n      ...$json,\n      should_escalate: true,\n      escalation_reason: 'EMERGENCY_DETECTED',\n      escalation_message: 'Detecto que podrÃ­as tener una urgencia. Te conecto de inmediato con nuestro equipo.',\n      priority: 'urgent'\n    }\n  }];\n}\n\n// Regla 5: Opt-out\nconst opt_out_keywords = ['detente', 'ya no', 'basta', 'stop', 'cancelar bot', 'agente', 'humano', 'persona'];\nconst wants_opt_out = opt_out_keywords.some(kw => message_lower.includes(kw));\n\nif (wants_opt_out) {\n  return [{\n    json: {\n      ...$json,\n      should_escalate: true,\n      escalation_reason: 'USER_OPT_OUT',\n      escalation_message: 'Entendido. Te conecto con un agente humano.'\n    }\n  }];\n}\n\n// Todo OK - continuar al clasificador\nreturn [{\n  json: {\n    ...$json,\n    should_escalate: false,\n    whatsapp_safe: true,\n    checked_at: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "code-whatsapp-safe",
+      "name": "WhatsApp Safe Check",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.should_escalate }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-escalate-now",
+      "name": "Â¿Escalar Ahora?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1008,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $input.item.json.message_text }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are an intent classifier for a dental clinic virtual assistant named SofIA.\nYour ONLY job is to analyze the patient's message and classify it into ONE category.\n\nYou MUST respond with valid JSON in this exact format:\n{\n  \"intent\": \"CREATE_EVENT\" | \"INFO\" | \"PAYMENT\" | \"HUMAN\",\n  \"confidence\": \"high\" | \"medium\" | \"low\"\n}\n\nCLASSIFICATION RULES:\n\n1. CREATE_EVENT\n   Use when: Patient wants to schedule, reschedule, cancel, or ask about appointment availability\n   Keywords: \"cita\", \"agendar\", \"reservar\", \"cambiar\", \"cancelar\", \"disponibilidad\", \"horario\"\n   Examples: \"Quiero una cita\", \"Tienen disponibilidad maÃ±ana?\"\n   \n2. INFO\n   Use when: Patient asks about services, prices, location, general information\n   Keywords: \"cuanto cuesta\", \"donde estÃ¡n\", \"direcciÃ³n\", \"servicios\"\n   Examples: \"CuÃ¡nto cuesta una limpieza?\", \"DÃ³nde estÃ¡n ubicados?\"\n   \n3. PAYMENT\n   Use when: Patient mentions pending payments or asks how to pay\n   Keywords: \"paguÃ©\", \"pago\", \"transferencia\", \"saldo\", \"debo\"\n   Examples: \"Ya paguÃ© mi consulta\", \"CÃ³mo puedo pagar?\"\n   \n4. HUMAN\n   Use when: Medical emergencies, complaints, complex requests\n   Keywords: \"emergencia\", \"urgencia\", \"dolor fuerte\", \"queja\", \"seguro mÃ©dico\"\n   Examples: \"Tengo un dolor terrible\", \"Necesito factura\"\n\nCRITICAL RULES:\n- If message mentions \"emergencia\", \"urgencia\", or \"dolor fuerte\" â†’ ALWAYS return HUMAN with high confidence\n- If ambiguous between CREATE_EVENT and another â†’ choose CREATE_EVENT\n- If greeting without clear intent â†’ return INFO with low confidence\n- If you cannot understand â†’ return HUMAN with low confidence\n- ALWAYS respond with valid JSON, nothing else"
+        }
+      },
+      "id": "agent-classifier",
+      "name": "Clasificador de IntenciÃ³n",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        1200,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4-turbo-preview",
+        "options": {
+          "maxTokens": 50,
+          "temperature": 0.1
+        }
+      },
+      "id": "openai-model",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        1200,
+        304
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "SeCPLJI4mV6p2hJR",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================\n// NORMALIZAR OUTPUT DEL CLASIFICADOR\n// ============================================\nlet intent_data = $json.output || $json;\n\nif (typeof intent_data === 'string') {\n  try {\n    intent_data = JSON.parse(intent_data);\n  } catch (e) {\n    const text = intent_data.toLowerCase();\n    if (text.includes('create_event')) {\n      intent_data = { intent: 'CREATE_EVENT', confidence: 'low' };\n    } else if (text.includes('info')) {\n      intent_data = { intent: 'INFO', confidence: 'low' };\n    } else if (text.includes('payment')) {\n      intent_data = { intent: 'PAYMENT', confidence: 'low' };\n    } else {\n      intent_data = { intent: 'HUMAN', confidence: 'low' };\n    }\n  }\n}\n\nlet intent = (intent_data.intent || 'HUMAN').trim().toUpperCase();\nlet confidence = (intent_data.confidence || 'low').toLowerCase();\n\nconst valid_intents = ['CREATE_EVENT', 'INFO', 'PAYMENT', 'HUMAN'];\nif (!valid_intents.includes(intent)) {\n  intent = 'HUMAN';\n  confidence = 'low';\n}\n\nreturn [{\n  json: {\n    ...$json,\n    intent: intent,\n    confidence: confidence,\n    classified_at: new Date().toISOString(),\n    phase: 'PHASE_1_TESTING',\n    action: 'ESCALATE_TO_HUMAN'\n  }\n}];"
+      },
+      "id": "code-normalize",
+      "name": "Normalizar Intent",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1408,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "rules": [
+            {},
+            {
+              "output": 1
+            },
+            {
+              "output": 2
+            },
+            {
+              "output": 3
+            }
+          ]
+        },
+        "fallbackOutput": 3
+      },
+      "id": "switch-router",
+      "name": "Router de IntenciÃ³n",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [
+        1600,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "escalation_message_final",
+              "value": "={{ $json.escalation_message || 'Te conecto con un agente de nuestro equipo.' }}"
+            },
+            {
+              "name": "escalation_reason_final",
+              "value": "={{ $json.escalation_reason || 'PHASE_1_' + $json.intent }}"
+            },
+            {
+              "name": "internal_note",
+              "value": "=ðŸ¤– SofIA (Fase 1)\\n\\nIntenciÃ³n detectada: {{ $json.intent }} ({{ $json.confidence }})\\nRazÃ³n: {{ $json.escalation_reason || 'Testing Fase 1' }}\\nMensaje original: \\\"{{ $json.message_text }}\\\"\\nClÃ­nica: {{ $json.clinic_id }}\\nPaciente: {{ $json.patient_id }}"
+            }
+          ],
+          "boolean": [
+            {
+              "name": "is_urgent",
+              "value": "={{ $json.priority === 'urgent' ? true : false }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-prepare",
+      "name": "Preparar Escalado",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [
+        1808,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://chat.redsolucionesti.com/api/v1/accounts/{{ $json.account_id }}/conversations/{{ $json.conversation_id }}/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "yypAwZDH2dV3crfbqJqWCgj1"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"content\": \"{{ $json.escalation_message_final }}\",\n  \"message_type\": \"outgoing\",\n  \"private\": false\n}",
+        "options": {}
+      },
+      "id": "http-send-message",
+      "name": "Enviar Mensaje Escalado",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2000,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://chat.redsolucionesti.com/api/v1/accounts/{{ $json.account_id }}/conversations/{{ $json.conversation_id }}/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "yypAwZDH2dV3crfbqJqWCgj1"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"content\": \"SofIA Bot - Fase 1\\n\\nIntencion: {{ $json.intent }}\\nConfianza: {{ $json.confidence }}\\nRazon: {{ $json.escalation_reason || \\\"Testing\\\" }}\\nMensaje: {{ $json.message_text }}\",\n  \"message_type\": \"outgoing\",\n  \"private\": true\n}",
+        "options": {}
+      },
+      "id": "http-note",
+      "name": "Crear Nota Interna",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2208,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://chat.redsolucionesti.com/api/v1/accounts/{{ $json.account_id }}/conversations/{{ $json.conversation_id }}/custom_attributes",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "yypAwZDH2dV3crfbqJqWCgj1"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"custom_attributes\": {\n    \"bot_handled\": true,\n    \"intent_detected\": \"{{ $json.intent }}\",\n    \"confidence\": \"{{ $json.confidence }}\",\n    \"bot_interaction_count\": {{ ($json.bot_interaction_count || 0) + 1 }},\n    \"last_bot_message_at\": \"{{ $now.toISO() }}\",\n    \"escalation_reason\": \"{{ $json.escalation_reason_final }}\",\n    \"sofia_phase\": \"PHASE_1\"\n  }\n}",
+        "options": {}
+      },
+      "id": "http-attributes",
+      "name": "Actualizar Custom Attributes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2400,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'ok', processed: true, intent: $json.intent, conversation_id: $json.conversation_id }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "respond-webhook",
+      "name": "Responder OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        2608,
+        304
+      ]
+    }
+  ],
+  "connections": {
+    "Chatwoot Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validar Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar Input": {
+      "main": [
+        [
+          {
+            "node": "Â¿Es del Usuario?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Â¿Es del Usuario?": {
+      "main": [
+        [
+          {
+            "node": "WhatsApp Safe Check",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WhatsApp Safe Check": {
+      "main": [
+        [
+          {
+            "node": "Â¿Escalar Ahora?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Â¿Escalar Ahora?": {
+      "main": [
+        [
+          {
+            "node": "Preparar Escalado",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Clasificador de IntenciÃ³n",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clasificador de IntenciÃ³n": {
+      "main": [
+        [
+          {
+            "node": "Normalizar Intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Clasificador de IntenciÃ³n",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar Intent": {
+      "main": [
+        [
+          {
+            "node": "Router de IntenciÃ³n",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Router de IntenciÃ³n": {
+      "main": [
+        [
+          {
+            "node": "Preparar Escalado",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Preparar Escalado",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Preparar Escalado",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Preparar Escalado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Escalado": {
+      "main": [
+        [
+          {
+            "node": "Enviar Mensaje Escalado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar Mensaje Escalado": {
+      "main": [
+        [
+          {
+            "node": "Crear Nota Interna",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Actualizar Custom Attributes": {
+      "main": [
+        [
+          {
+            "node": "Responder OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Crear Nota Interna": {
+      "main": [
+        [
+          {
+            "node": "Actualizar Custom Attributes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  }
+}

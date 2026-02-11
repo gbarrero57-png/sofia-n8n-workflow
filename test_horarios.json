@@ -1,0 +1,1 @@
+{"event":"message_created","content":"Qué horarios tienen?","message_type":"incoming","created_at":1770682400,"account":{"id":2},"sender":{"id":3,"name":"Test"},"conversation":{"id":3,"inbox_id":2,"status":"pending","contact_inbox":{"source_id":"test","inbox":{"channel_type":"Channel::WebWidget"}},"custom_attributes":{"bot_interaction_count":0}}}

@@ -1,0 +1,311 @@
+{
+  "name": "Sofia",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "chatwoot-sofia",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-chatwoot",
+      "name": "Chatwoot Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [208, 288],
+      "webhookId": "chatwoot-sofia"
+    },
+    {
+      "parameters": {
+        "jsCode": "const payload = $input.item.json.body || $input.item.json;\nreturn [{\n  json: {\n    message_text: (payload.content || '').trim(),\n    conversation_id: payload.conversation?.id,\n    inbox_id: payload.conversation?.inbox_id,\n    account_id: payload.account?.id || 2,\n    message_type: payload.message_type,\n    bot_interaction_count: payload.conversation?.custom_attributes?.bot_interaction_count || 0,\n    sender_name: payload.sender?.name || 'Paciente'\n  }\n}];"
+      },
+      "id": "code-validate",
+      "name": "Validar Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [432, 288]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {},
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "1",
+              "leftValue": "={{ $json.message_type }}",
+              "rightValue": "incoming",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "if-is-user-message",
+      "name": "IsUserMessage",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [656, 288]
+    },
+    {
+      "parameters": {
+        "jsCode": "const KNOWLEDGE_BASE = {\n  \"services\": [\n    {\"name\": \"Limpieza dental\", \"price\": \"S/ 80-150\", \"duration\": \"30-45 min\"},\n    {\"name\": \"Blanqueamiento\", \"price\": \"S/ 300-500\", \"duration\": \"60 min\"},\n    {\"name\": \"Consulta general\", \"price\": \"S/ 50-80\", \"duration\": \"30 min\"},\n    {\"name\": \"Ortodoncia\", \"price\": \"S/ 2,500-5,000\", \"duration\": \"12-24 meses\"},\n    {\"name\": \"Extracción simple\", \"price\": \"S/ 100-200\", \"duration\": \"30 min\"},\n    {\"name\": \"Endodoncia\", \"price\": \"S/ 300-600\", \"duration\": \"60-90 min\"},\n    {\"name\": \"Implante dental\", \"price\": \"S/ 2,000-3,500\", \"duration\": \"3-6 meses\"},\n    {\"name\": \"Carillas\", \"price\": \"S/ 400-800 por pieza\", \"duration\": \"2-3 citas\"}\n  ],\n  \"hours\": \"Lun-Vie 9am-7pm, Sáb 9am-2pm\",\n  \"phone\": \"+51 905 858 566\",\n  \"location\": \"Av. Principal 123, San Isidro, Lima\"\n};\n\nreturn [{\n  json: {\n    ...$json,\n    knowledge_base_json: JSON.stringify(KNOWLEDGE_BASE, null, 2)\n  }\n}];"
+      },
+      "id": "code-knowledge-base",
+      "name": "Knowledge Base",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 160]
+    },
+    {
+      "parameters": {
+        "jsCode": "const kb = $json.knowledge_base_json;\nconst question = $json.message_text;\n\nconst system_prompt = `Eres SofIA, asistente de Clínica Dental SofIA Dent.\nResponde usando SOLO esta información:\\n${kb}\\n\\nREGLAS:\\n1. Respuestas cortas (máx 3 oraciones)\\n2. Si no tienes la info, di: \\\"No tengo esa información. Te conecto con un agente.\\\"\\n3. Siempre termina preguntando: \\\"¿En qué más puedo ayudarte?\\\"\\n4. Sé amable y profesional`;\n\nreturn [{\n  json: {\n    ...$json,\n    system_prompt: system_prompt,\n    user_prompt: question\n  }\n}];"
+      },
+      "id": "code-prepare-prompt",
+      "name": "Preparar Prompt INFO",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1104, 160]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"gpt-4o-mini\",\n  \"messages\": [\n    {\"role\": \"system\", \"content\": {{ JSON.stringify($json.system_prompt) }}},\n    {\"role\": \"user\", \"content\": {{ JSON.stringify($json.user_prompt) }}}\n  ],\n  \"temperature\": 0.3,\n  \"max_tokens\": 300\n}",
+        "options": {}
+      },
+      "id": "http-call-openai",
+      "name": "Llamar OpenAI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1328, 160],
+      "credentials": {
+        "openAiApi": {
+          "id": "SeCPLJI4mV6p2hJR",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $json;\nconst llm_response = response.choices?.[0]?.message?.content || '';\nconst original_data = $node[\"Preparar Prompt INFO\"].json;\n\nreturn [{\n  json: {\n    ...original_data,\n    llm_response: llm_response.trim()\n  }\n}];"
+      },
+      "id": "code-extract-response",
+      "name": "Extraer Respuesta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1552, 160]
+    },
+    {
+      "parameters": {
+        "jsCode": "const llm_response = $json.llm_response || '';\nconst no_info_keywords = ['no tengo esa información', 'no tengo información', 'te conecto con un agente'];\n\nlet should_escalate = false;\nif (llm_response.length > 500 || llm_response.length < 10) {\n  should_escalate = true;\n}\n\nfor (const keyword of no_info_keywords) {\n  if (llm_response.toLowerCase().includes(keyword)) {\n    should_escalate = true;\n    break;\n  }\n}\n\nreturn [{\n  json: {\n    ...$json,\n    validation_passed: !should_escalate\n  }\n}];"
+      },
+      "id": "code-validate-response",
+      "name": "Validar Respuesta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1776, 160]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.validation_passed }}",
+              "value2": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "if-valid-response",
+      "name": "¿Válida?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2000, 160]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://chat.redsolucionesti.com/api/v1/accounts/{{ $json.account_id }}/conversations/{{ $json.conversation_id }}/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "yypAwZDH2dV3crfbqJqWCgj1"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"content\": {{ JSON.stringify($json.llm_response) }},\n  \"message_type\": \"outgoing\",\n  \"private\": false\n}",
+        "options": {}
+      },
+      "id": "http-send-info-response",
+      "name": "Enviar Respuesta INFO",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2224, 80]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://chat.redsolucionesti.com/api/v1/accounts/{{ $json.account_id }}/conversations/{{ $json.conversation_id }}/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "yypAwZDH2dV3crfbqJqWCgj1"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"content\": \"[Fase 2] Pregunta: {{ $json.user_prompt }}\\nRespuesta enviada OK\",\n  \"message_type\": \"outgoing\",\n  \"private\": true\n}",
+        "options": {}
+      },
+      "id": "http-create-note-info",
+      "name": "Nota Interna",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2448, 80]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://chat.redsolucionesti.com/api/v1/accounts/{{ $json.account_id }}/conversations/{{ $json.conversation_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "yypAwZDH2dV3crfbqJqWCgj1"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"custom_attributes\": {\n    \"sofia_phase\": \"PHASE_2_INFO\",\n    \"bot_interaction_count\": {{ ($json.bot_interaction_count || 0) + 1 }},\n    \"last_bot_message_at\": \"{{ $now.toISO() }}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "http-update-attributes-info",
+      "name": "Update Attributes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2672, 80]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    ...$json,\n    escalation_message: 'Te conecto con un agente para ayudarte mejor.'\n  }\n}];"
+      },
+      "id": "code-prepare-escalate",
+      "name": "Preparar Escalado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2224, 240]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://chat.redsolucionesti.com/api/v1/accounts/{{ $json.account_id }}/conversations/{{ $json.conversation_id }}/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "yypAwZDH2dV3crfbqJqWCgj1"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"content\": {{ JSON.stringify($json.escalation_message) }},\n  \"message_type\": \"outgoing\",\n  \"private\": false\n}",
+        "options": {}
+      },
+      "id": "http-send-escalate",
+      "name": "Enviar Escalado",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2448, 240]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"status\": \"ok\", \"phase\": \"2\", \"workflow\": \"sofia\" }",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "respond-webhook",
+      "name": "Responder OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2896, 160]
+    }
+  ],
+  "connections": {
+    "Chatwoot Webhook": {
+      "main": [[{"node": "Validar Input", "type": "main", "index": 0}]]
+    },
+    "Validar Input": {
+      "main": [[{"node": "IsUserMessage", "type": "main", "index": 0}]]
+    },
+    "IsUserMessage": {
+      "main": [
+        [{"node": "Knowledge Base", "type": "main", "index": 0}],
+        [{"node": "Responder OK", "type": "main", "index": 0}]
+      ]
+    },
+    "Knowledge Base": {
+      "main": [[{"node": "Preparar Prompt INFO", "type": "main", "index": 0}]]
+    },
+    "Preparar Prompt INFO": {
+      "main": [[{"node": "Llamar OpenAI", "type": "main", "index": 0}]]
+    },
+    "Llamar OpenAI": {
+      "main": [[{"node": "Extraer Respuesta", "type": "main", "index": 0}]]
+    },
+    "Extraer Respuesta": {
+      "main": [[{"node": "Validar Respuesta", "type": "main", "index": 0}]]
+    },
+    "Validar Respuesta": {
+      "main": [[{"node": "¿Válida?", "type": "main", "index": 0}]]
+    },
+    "¿Válida?": {
+      "main": [
+        [{"node": "Enviar Respuesta INFO", "type": "main", "index": 0}],
+        [{"node": "Preparar Escalado", "type": "main", "index": 0}]
+      ]
+    },
+    "Enviar Respuesta INFO": {
+      "main": [[{"node": "Nota Interna", "type": "main", "index": 0}]]
+    },
+    "Nota Interna": {
+      "main": [[{"node": "Update Attributes", "type": "main", "index": 0}]]
+    },
+    "Update Attributes": {
+      "main": [[{"node": "Responder OK", "type": "main", "index": 0}]]
+    },
+    "Preparar Escalado": {
+      "main": [[{"node": "Enviar Escalado", "type": "main", "index": 0}]]
+    },
+    "Enviar Escalado": {
+      "main": [[{"node": "Responder OK", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "staticData": null
+}

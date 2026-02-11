@@ -1,0 +1,66 @@
+{
+  "name": "Sofia",
+  "active": true,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "chatwoot-sofia",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-chatwoot",
+      "name": "Chatwoot Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [208, 288],
+      "webhookId": "chatwoot-sofia"
+    },
+    {
+      "parameters": {
+        "jsCode": "const payload = $input.item.json.body || $input.item.json;\nreturn [{\n  json: {\n    test: 'ITERATION_5_MINIMAL',\n    message_type: payload.message_type,\n    content: payload.content,\n    conv_id: payload.conversation?.id,\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "code-process",
+      "name": "Process",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [432, 288]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "=OK_ITER5_MINIMAL",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/plain"
+              }
+            ]
+          }
+        }
+      },
+      "id": "respond-webhook",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [656, 288]
+    }
+  ],
+  "connections": {
+    "Chatwoot Webhook": {
+      "main": [[{"node": "Process", "type": "main", "index": 0}]]
+    },
+    "Process": {
+      "main": [[{"node": "Respond", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "staticData": null
+}

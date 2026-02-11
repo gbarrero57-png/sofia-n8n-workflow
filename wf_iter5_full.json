@@ -1,0 +1,119 @@
+{
+  "name": "Sofia",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "chatwoot-sofia-iter5",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-chatwoot",
+      "name": "Chatwoot Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [208, 288],
+      "webhookId": "chatwoot-sofia-iter5"
+    },
+    {
+      "parameters": {
+        "jsCode": "const payload = $input.item.json.body || $input.item.json;\nreturn [{\n  json: {\n    message_text: (payload.content || '').trim(),\n    conversation_id: payload.conversation?.id || 3,\n    account_id: payload.account?.id || 2,\n    message_type: payload.message_type || 'incoming'\n  }\n}];"
+      },
+      "id": "code-validate",
+      "name": "Validar Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [432, 288]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {},
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "1",
+              "leftValue": "={{ $json.message_type }}",
+              "rightValue": "incoming",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "if-is-user-message",
+      "name": "IsUserMessage",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [656, 288]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://chat.redsolucionesti.com/api/v1/accounts/{{ $json.account_id }}/conversations/{{ $json.conversation_id }}/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "yypAwZDH2dV3crfbqJqWCgj1"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"content\": \"[ITER5] ✅ HTTP directo funcionó! Tu pregunta fue: {{ $json.message_text }}\",\n  \"message_type\": \"outgoing\",\n  \"private\": false\n}",
+        "options": {}
+      },
+      "id": "http-send-message",
+      "name": "Enviar a Chatwoot",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 160]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"status\": \"ok\", \"iter\": 5, \"sent_to_chatwoot\": true }",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "respond-webhook",
+      "name": "Responder OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1104, 288]
+    }
+  ],
+  "connections": {
+    "Chatwoot Webhook": {
+      "main": [[{"node": "Validar Input", "type": "main", "index": 0}]]
+    },
+    "Validar Input": {
+      "main": [[{"node": "IsUserMessage", "type": "main", "index": 0}]]
+    },
+    "IsUserMessage": {
+      "main": [
+        [{"node": "Enviar a Chatwoot", "type": "main", "index": 0}],
+        [{"node": "Responder OK", "type": "main", "index": 0}]
+      ]
+    },
+    "Enviar a Chatwoot": {
+      "main": [[{"node": "Responder OK", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "staticData": null
+}

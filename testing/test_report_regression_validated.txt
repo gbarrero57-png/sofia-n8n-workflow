@@ -1,0 +1,56 @@
+
+======================================================================
+                        FINAL TEST REPORT
+======================================================================
+
+Date: 2026-02-10 19:11:48
+Duration: 65.00 seconds
+
+SUMMARY:
+  Total Tests:   5
+  Passed:        1
+  Failed:        4
+  Success Rate:  20.0%
+
+TEST BREAKDOWN:
+
+[FAIL] Regression:
+   Passed: 1/5 (20%)
+   Failed tests:
+     - Regression: INFO flow still works: INFO flow broken
+     - Regression: PAYMENT escalation works: PAYMENT escalation broken
+     - Regression: HUMAN escalation works: HUMAN escalation broken
+     - Regression: No infinite loops: Timeout or not finished
+
+FAILED TESTS DETAILS:
+
+  [FAIL] Regression: INFO flow still works
+    Message: INFO flow broken
+    Details:
+      - intent: 
+      - went_to_phase4: False
+      - execution_id: N/A
+
+  [FAIL] Regression: PAYMENT escalation works
+    Message: PAYMENT escalation broken
+    Details:
+      - intent: 
+      - escalated: False
+      - execution_id: N/A
+
+  [FAIL] Regression: HUMAN escalation works
+    Message: HUMAN escalation broken
+    Details:
+      - intent: 
+      - escalated: False
+      - execution_id: N/A
+
+  [FAIL] Regression: No infinite loops
+    Message: Timeout or not finished
+    Details:
+      - elapsed_seconds: 20.332534074783325
+      - finished: False
+      - execution_id: N/A
+
+RECOMMENDATIONS:
+  [FAIL] Critical failures detected. Workflow needs fixes before deployment.

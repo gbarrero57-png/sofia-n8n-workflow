@@ -1,0 +1,28 @@
+{
+  "event": "message_created",
+  "content": "Hola, necesito agendar una cita para limpieza dental",
+  "message_type": "incoming",
+  "created_at": 1707575500,
+  "account": {
+    "id": 2
+  },
+  "sender": {
+    "id": 200,
+    "name": "Maria Test",
+    "email": "maria@test.com"
+  },
+  "conversation": {
+    "id": 4001,
+    "inbox_id": 2,
+    "status": "open",
+    "contact_inbox": {
+      "source_id": "test-maria-001",
+      "inbox": {
+        "channel_type": "Channel::Whatsapp"
+      }
+    },
+    "custom_attributes": {
+      "bot_interaction_count": 0
+    }
+  }
+}

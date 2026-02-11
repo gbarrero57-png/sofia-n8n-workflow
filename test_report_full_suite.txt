@@ -1,0 +1,329 @@
+
+======================================================================
+                        FINAL TEST REPORT
+======================================================================
+
+Date: 2026-02-10 17:50:54
+Duration: 349.53 seconds
+
+SUMMARY:
+  Total Tests:   36
+  Passed:        3
+  Failed:        33
+  Success Rate:  8.3%
+
+TEST BREAKDOWN:
+
+[FAIL] CREATE_EVENT:
+   Passed: 0/4 (0%)
+   Failed tests:
+     - CREATE_EVENT: 'Quiero agendar una cita para l...': Detected as 
+     - CREATE_EVENT: 'Necesito una cita de ortodonci...': Detected as 
+     - CREATE_EVENT: 'Me gustaría agendar un blanque...': Detected as 
+     - CREATE_EVENT: 'Quiero reservar una consulta...': Detected as 
+
+[FAIL] INFO:
+   Passed: 0/4 (0%)
+   Failed tests:
+     - INFO: '¿Cuánto cuesta una limpieza?...': Detected as 
+     - INFO: '¿Cuáles son sus horarios?...': Detected as 
+     - INFO: '¿Dónde quedan ubicados?...': Detected as 
+     - INFO: '¿Qué servicios ofrecen?...': Detected as 
+
+[FAIL] PAYMENT:
+   Passed: 0/4 (0%)
+   Failed tests:
+     - PAYMENT: '¿Cómo puedo pagar?...': Detected as 
+     - PAYMENT: '¿Aceptan tarjetas?...': Detected as 
+     - PAYMENT: 'Quiero hacer un pago...': Detected as 
+     - PAYMENT: '¿Tienen yape?...': Detected as 
+
+[FAIL] HUMAN:
+   Passed: 0/4 (0%)
+   Failed tests:
+     - HUMAN: 'Hola...': Detected as 
+     - HUMAN: 'Buenos días...': Detected as 
+     - HUMAN: '????...': Detected as 
+     - HUMAN: 'asdfghjkl...': Detected as 
+
+[FAIL] WhatsApp Safe Check:
+   Passed: 1/3 (33%)
+   Failed tests:
+     - WhatsApp Safe Check: Second interaction: Failed to escalate
+     - WhatsApp Safe Check: WhatsApp channel respects limit: Failed to escalate on WhatsApp
+
+[FAIL] Calendar Read:
+   Passed: 0/1 (0%)
+   Failed tests:
+     - Calendar Read: Google Calendar node executes: Failed to read calendar
+
+[FAIL] Slots Calculation:
+   Passed: 0/1 (0%)
+   Failed tests:
+     - Slots Calculation: Calculates available slots: Calculated 0 slots
+
+[FAIL] Slot Selection:
+   Passed: 0/1 (0%)
+   Failed tests:
+     - Slot Selection: Selects top 3 slots: Failed to select slots
+
+[PASS] No Availability:
+   Passed: 1/1 (100%)
+
+[FAIL] Slot Offer:
+   Passed: 0/1 (0%)
+   Failed tests:
+     - Slot Offer: Message formatted and sent: Failed to send offer
+
+[FAIL] Custom Attributes:
+   Passed: 0/1 (0%)
+   Failed tests:
+     - Custom Attributes: awaiting_slot_confirmation set to true: Failed to update attributes
+
+[FAIL] Phase 3 Completion:
+   Passed: 0/1 (0%)
+   Failed tests:
+     - Phase 3 Completion: Workflow finishes successfully: Phase 3 failed to complete
+
+[FAIL] Slot Confirmation Detection:
+   Passed: 0/1 (0%)
+   Failed tests:
+     - Slot Confirmation Detection: Detects second interaction: Failed to detect second interaction
+
+[FAIL] Slot Choice Processing:
+   Passed: 0/1 (0%)
+   Failed tests:
+     - Slot Choice Processing: Identifies slot selection: Failed to identify slot
+
+[FAIL] Event Creation:
+   Passed: 0/1 (0%)
+   Failed tests:
+     - Event Creation: Creates event in Google Calendar: Failed to create event
+
+[FAIL] Confirmation Message:
+   Passed: 0/1 (0%)
+   Failed tests:
+     - Confirmation Message: Sends confirmation to patient: Failed to send confirmation
+
+[FAIL] Ambiguous Response:
+   Passed: 0/1 (0%)
+   Failed tests:
+     - Ambiguous Response: Requests clarification: Accepted ambiguous response (may need review)
+
+[FAIL] Regression:
+   Passed: 1/5 (20%)
+   Failed tests:
+     - Regression: INFO flow still works: INFO flow broken
+     - Regression: PAYMENT escalation works: PAYMENT escalation broken
+     - Regression: HUMAN escalation works: HUMAN escalation broken
+     - Regression: No infinite loops: Timeout or not finished
+
+FAILED TESTS DETAILS:
+
+  [FAIL] CREATE_EVENT: 'Quiero agendar una cita para l...'
+    Message: Detected as 
+    Details:
+      - nodes_executed: 0
+      - execution_id: N/A
+
+  [FAIL] CREATE_EVENT: 'Necesito una cita de ortodonci...'
+    Message: Detected as 
+    Details:
+      - nodes_executed: 0
+      - execution_id: N/A
+
+  [FAIL] CREATE_EVENT: 'Me gustaría agendar un blanque...'
+    Message: Detected as 
+    Details:
+      - nodes_executed: 0
+      - execution_id: N/A
+
+  [FAIL] CREATE_EVENT: 'Quiero reservar una consulta...'
+    Message: Detected as 
+    Details:
+      - nodes_executed: 0
+      - execution_id: N/A
+
+  [FAIL] INFO: '¿Cuánto cuesta una limpieza?...'
+    Message: Detected as 
+    Details:
+      - nodes_executed: 0
+      - execution_id: N/A
+
+  [FAIL] INFO: '¿Cuáles son sus horarios?...'
+    Message: Detected as 
+    Details:
+      - nodes_executed: 0
+      - execution_id: N/A
+
+  [FAIL] INFO: '¿Dónde quedan ubicados?...'
+    Message: Detected as 
+    Details:
+      - nodes_executed: 0
+      - execution_id: N/A
+
+  [FAIL] INFO: '¿Qué servicios ofrecen?...'
+    Message: Detected as 
+    Details:
+      - nodes_executed: 0
+      - execution_id: N/A
+
+  [FAIL] PAYMENT: '¿Cómo puedo pagar?...'
+    Message: Detected as 
+    Details:
+      - nodes_executed: 0
+      - execution_id: N/A
+
+  [FAIL] PAYMENT: '¿Aceptan tarjetas?...'
+    Message: Detected as 
+    Details:
+      - nodes_executed: 0
+      - execution_id: N/A
+
+  [FAIL] PAYMENT: 'Quiero hacer un pago...'
+    Message: Detected as 
+    Details:
+      - nodes_executed: 0
+      - execution_id: N/A
+
+  [FAIL] PAYMENT: '¿Tienen yape?...'
+    Message: Detected as 
+    Details:
+      - nodes_executed: 0
+      - execution_id: N/A
+
+  [FAIL] HUMAN: 'Hola...'
+    Message: Detected as 
+    Details:
+      - nodes_executed: 0
+      - execution_id: N/A
+
+  [FAIL] HUMAN: 'Buenos días...'
+    Message: Detected as 
+    Details:
+      - nodes_executed: 0
+      - execution_id: N/A
+
+  [FAIL] HUMAN: '????...'
+    Message: Detected as 
+    Details:
+      - nodes_executed: 0
+      - execution_id: N/A
+
+  [FAIL] HUMAN: 'asdfghjkl...'
+    Message: Detected as 
+    Details:
+      - nodes_executed: 0
+      - execution_id: N/A
+
+  [FAIL] WhatsApp Safe Check: Second interaction
+    Message: Failed to escalate
+    Details:
+      - nodes_executed: 0
+
+  [FAIL] WhatsApp Safe Check: WhatsApp channel respects limit
+    Message: Failed to escalate on WhatsApp
+    Details:
+      - nodes_executed: 0
+
+  [FAIL] Calendar Read: Google Calendar node executes
+    Message: Failed to read calendar
+    Details:
+      - nodes_executed: 0
+      - execution_id: N/A
+
+  [FAIL] Slots Calculation: Calculates available slots
+    Message: Calculated 0 slots
+    Details:
+      - slots_count: 0
+      - execution_id: N/A
+
+  [FAIL] Slot Selection: Selects top 3 slots
+    Message: Failed to select slots
+    Details:
+      - nodes_executed: 0
+      - execution_id: N/A
+
+  [FAIL] Slot Offer: Message formatted and sent
+    Message: Failed to send offer
+    Details:
+      - format_node: False
+      - send_node: False
+      - execution_id: N/A
+
+  [FAIL] Custom Attributes: awaiting_slot_confirmation set to true
+    Message: Failed to update attributes
+    Details:
+      - node_executed: False
+      - execution_id: N/A
+
+  [FAIL] Phase 3 Completion: Workflow finishes successfully
+    Message: Phase 3 failed to complete
+    Details:
+      - finished: False
+      - success: False
+      - nodes_executed: 0
+      - execution_id: N/A
+
+  [FAIL] Slot Confirmation Detection: Detects second interaction
+    Message: Failed to detect second interaction
+    Details:
+      - slot_confirmation_pending: False
+      - execution_id: N/A
+
+  [FAIL] Slot Choice Processing: Identifies slot selection
+    Message: Failed to identify slot
+    Details:
+      - slot_chosen: False
+      - execution_id: N/A
+
+  [FAIL] Event Creation: Creates event in Google Calendar
+    Message: Failed to create event
+    Details:
+      - event_created: False
+      - event_id: N/A
+      - execution_id: N/A
+
+  [FAIL] Confirmation Message: Sends confirmation to patient
+    Message: Failed to send confirmation
+    Details:
+      - confirm_node: False
+      - send_node: False
+      - execution_id: N/A
+
+  [FAIL] Ambiguous Response: Requests clarification
+    Message: Accepted ambiguous response (may need review)
+    Details:
+      - clarification_node: False
+      - execution_id: N/A
+
+  [FAIL] Regression: INFO flow still works
+    Message: INFO flow broken
+    Details:
+      - intent: 
+      - went_to_phase4: False
+      - execution_id: N/A
+
+  [FAIL] Regression: PAYMENT escalation works
+    Message: PAYMENT escalation broken
+    Details:
+      - intent: 
+      - escalated: False
+      - execution_id: N/A
+
+  [FAIL] Regression: HUMAN escalation works
+    Message: HUMAN escalation broken
+    Details:
+      - intent: 
+      - escalated: False
+      - execution_id: N/A
+
+  [FAIL] Regression: No infinite loops
+    Message: Timeout or not finished
+    Details:
+      - elapsed_seconds: 18.028132915496826
+      - finished: False
+      - execution_id: N/A
+
+RECOMMENDATIONS:
+  [FAIL] Critical failures detected. Workflow needs fixes before deployment.

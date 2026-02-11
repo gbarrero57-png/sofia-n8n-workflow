@@ -1,0 +1,140 @@
+name: Deploy SofIA Workflow
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        type: choice
+        options:
+          - development
+          - staging
+          - production
+      run_tests:
+        description: 'Run tests before deployment'
+        required: true
+        type: boolean
+        default: true
+
+jobs:
+  pre-deployment-tests:
+    name: Pre-Deployment Tests
+    runs-on: ubuntu-latest
+    if: inputs.run_tests == true
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          pip install requests
+
+      - name: Run tests
+        env:
+          N8N_API_KEY: ${{ secrets.N8N_API_KEY }}
+          WORKFLOW_ID: ${{ secrets.WORKFLOW_ID }}
+        run: |
+          cd testing
+          python quick_setup.py "$N8N_API_KEY" "$WORKFLOW_ID"
+          python test_runner.py --phases all --output pre_deploy_report.txt
+
+      - name: Validate success rate
+        run: |
+          cd testing
+          SUCCESS_RATE=$(grep -oP 'Success Rate:\s+\K\d+\.\d+' pre_deploy_report.txt || echo "0.0")
+
+          if (( $(echo "$SUCCESS_RATE < 95.0" | bc -l) )); then
+            echo "::error::Tests must have >95% success rate before deployment (current: $SUCCESS_RATE%)"
+            exit 1
+          fi
+
+          echo "::notice::Tests passed with $SUCCESS_RATE% success rate"
+
+  deploy:
+    name: Deploy to ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    needs: pre-deployment-tests
+    if: always() && (needs.pre-deployment-tests.result == 'success' || inputs.run_tests == false)
+    environment: ${{ inputs.environment }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy workflow to n8n
+        env:
+          N8N_API_KEY: ${{ secrets.N8N_API_KEY }}
+          N8N_BASE_URL: ${{ secrets.N8N_BASE_URL }}
+          WORKFLOW_ID: ${{ secrets.WORKFLOW_ID }}
+        run: |
+          echo "Deploying SofIA workflow to ${{ inputs.environment }}..."
+
+          # Upload latest workflow JSON
+          curl -X PUT \
+            "${N8N_BASE_URL}/api/v1/workflows/${WORKFLOW_ID}" \
+            -H "X-N8N-API-KEY: ${N8N_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d @wf_phase4_FINAL_WORKING.json
+
+          echo "::notice::Workflow deployed successfully to ${{ inputs.environment }}"
+
+      - name: Activate workflow
+        env:
+          N8N_API_KEY: ${{ secrets.N8N_API_KEY }}
+          N8N_BASE_URL: ${{ secrets.N8N_BASE_URL }}
+          WORKFLOW_ID: ${{ secrets.WORKFLOW_ID }}
+        run: |
+          curl -X PATCH \
+            "${N8N_BASE_URL}/api/v1/workflows/${WORKFLOW_ID}" \
+            -H "X-N8N-API-KEY: ${N8N_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d '{"active": true}'
+
+          echo "::notice::Workflow activated"
+
+  post-deployment-tests:
+    name: Post-Deployment Validation
+    runs-on: ubuntu-latest
+    needs: deploy
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Run smoke tests
+        env:
+          N8N_API_KEY: ${{ secrets.N8N_API_KEY }}
+          WORKFLOW_ID: ${{ secrets.WORKFLOW_ID }}
+        run: |
+          cd testing
+          python quick_setup.py "$N8N_API_KEY" "$WORKFLOW_ID"
+          python test_runner.py --phases regression --output post_deploy_report.txt
+
+      - name: Upload deployment report
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-report-${{ inputs.environment }}
+          path: testing/post_deploy_report.txt
+          retention-days: 90
+
+      - name: Create deployment record
+        run: |
+          echo "Deployment completed successfully"
+          echo "Environment: ${{ inputs.environment }}"
+          echo "Timestamp: $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          echo "Commit: ${{ github.sha }}"

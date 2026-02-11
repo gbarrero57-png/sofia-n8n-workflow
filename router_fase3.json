@@ -1,0 +1,63 @@
+{
+  "parameters": {
+    "mode": "expression",
+    "output": "input",
+    "rules": {
+      "rules": [
+        {
+          "id": "1",
+          "outputKey": "0",
+          "conditions": [
+            {
+              "leftValue": "={{ $json.intent }}",
+              "rightValue": "CREATE_EVENT",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        {
+          "id": "2",
+          "outputKey": "1",
+          "conditions": [
+            {
+              "leftValue": "={{ $json.intent }}",
+              "rightValue": "INFO",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        {
+          "id": "3",
+          "outputKey": "2",
+          "conditions": [
+            {
+              "leftValue": "={{ $json.intent }}",
+              "rightValue": "PAYMENT",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      ],
+      "options": {
+        "fallbackOutput": "3"
+      }
+    }
+  },
+  "id": "switch-router",
+  "name": "Router de Intención",
+  "type": "n8n-nodes-base.switch",
+  "typeVersion": 3,
+  "position": [
+    1904,
+    288
+  ]
+}

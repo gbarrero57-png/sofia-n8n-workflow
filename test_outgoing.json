@@ -1,0 +1,14 @@
+{
+  "event": "message_created",
+  "message_type": "outgoing",
+  "content": "Test outgoing - debe ignorarse",
+  "created_at": 1770608011,
+  "account": {"id": 2},
+  "sender": {"id": 5},
+  "conversation": {
+    "id": 4,
+    "inbox_id": 3,
+    "custom_attributes": {"clinic_id": "test"},
+    "contact_inbox": {"source_id": "+51999888999", "inbox": {"channel_type": "Channel::WebWidget"}}
+  }
+}

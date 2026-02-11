@@ -1,0 +1,27 @@
+{
+  "event": "message_created",
+  "content": "Hacen cirug\u00eda maxilofacial?",
+  "message_type": "incoming",
+  "created_at": 1770654806,
+  "account": {
+    "id": 2
+  },
+  "sender": {
+    "id": 3,
+    "name": "Paciente Test"
+  },
+  "conversation": {
+    "id": 203,
+    "inbox_id": 2,
+    "status": "pending",
+    "contact_inbox": {
+      "source_id": "test-info-004",
+      "inbox": {
+        "channel_type": "Channel::WebWidget"
+      }
+    },
+    "custom_attributes": {
+      "bot_interaction_count": 0
+    }
+  }
+}

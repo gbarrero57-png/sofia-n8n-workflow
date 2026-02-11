@@ -1,0 +1,30 @@
+{
+  "event": "message_created",
+  "content": "La opcion 2 por favor",
+  "message_type": "incoming",
+  "created_at": 1707575600,
+  "account": {
+    "id": 2
+  },
+  "sender": {
+    "id": 200,
+    "name": "Maria Test",
+    "email": "maria@test.com"
+  },
+  "conversation": {
+    "id": 4001,
+    "inbox_id": 2,
+    "status": "open",
+    "contact_inbox": {
+      "source_id": "test-maria-001",
+      "inbox": {
+        "channel_type": "Channel::Whatsapp"
+      }
+    },
+    "custom_attributes": {
+      "bot_interaction_count": 1,
+      "awaiting_slot_confirmation": "true",
+      "offered_slots": "[{\"option_number\":1,\"date\":\"miércoles, 11 de febrero de 2026\",\"time\":\"09:00 a.m.\",\"start_iso\":\"2026-02-11T14:00:00.000Z\",\"end_iso\":\"2026-02-11T14:30:00.000Z\"},{\"option_number\":2,\"date\":\"miércoles, 11 de febrero de 2026\",\"time\":\"09:30 a.m.\",\"start_iso\":\"2026-02-11T14:30:00.000Z\",\"end_iso\":\"2026-02-11T15:00:00.000Z\"},{\"option_number\":3,\"date\":\"miércoles, 11 de febrero de 2026\",\"time\":\"10:00 a.m.\",\"start_iso\":\"2026-02-11T15:00:00.000Z\",\"end_iso\":\"2026-02-11T15:30:00.000Z\"}]"
+    }
+  }
+}

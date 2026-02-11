@@ -1,0 +1,41 @@
+// ============================================
+// NORMALIZAR OUTPUT DEL CLASIFICADOR
+// ============================================
+let intent_data = $json.output || $json;
+
+if (typeof intent_data === 'string') {
+  try {
+    intent_data = JSON.parse(intent_data);
+  } catch (e) {
+    const text = intent_data.toLowerCase();
+    if (text.includes('create_event')) {
+      intent_data = { intent: 'CREATE_EVENT', confidence: 'low' };
+    } else if (text.includes('info')) {
+      intent_data = { intent: 'INFO', confidence: 'low' };
+    } else if (text.includes('payment')) {
+      intent_data = { intent: 'PAYMENT', confidence: 'low' };
+    } else {
+      intent_data = { intent: 'HUMAN', confidence: 'low' };
+    }
+  }
+}
+
+let intent = (intent_data.intent || 'HUMAN').trim().toUpperCase();
+let confidence = (intent_data.confidence || 'low').toLowerCase();
+
+const valid_intents = ['CREATE_EVENT', 'INFO', 'PAYMENT', 'HUMAN'];
+if (!valid_intents.includes(intent)) {
+  intent = 'HUMAN';
+  confidence = 'low';
+}
+
+return [{
+  json: {
+    ...$json,
+    intent: intent,
+    confidence: confidence,
+    classified_at: new Date().toISOString(),
+    phase: 'PHASE_1_TESTING',
+    action: 'ESCALATE_TO_HUMAN'
+  }
+}];

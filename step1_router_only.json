@@ -1,0 +1,809 @@
+{
+  "name": "Sofia",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "chatwoot-sofia",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-chatwoot",
+      "name": "Chatwoot Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        208,
+        288
+      ],
+      "webhookId": "chatwoot-sofia"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================\n// VALIDAR INPUT + DETECTAR CONTACTO NUEVO\n// ============================================\nconst payload = $input.item.json.body || $input.item.json;\n\n// Campos del evento\nconst event = payload.event;\nconst content = payload.content || '';\nconst conversation_id = payload.conversation?.id;\nconst inbox_id = payload.conversation?.inbox_id;\nconst clinic_id = payload.conversation?.custom_attributes?.clinic_id;\nconst patient_id = payload.conversation?.custom_attributes?.patient_id;\nconst contact_phone = payload.conversation?.contact_inbox?.source_id;\nconst contact_id = payload.sender?.id;\nconst channel_type = payload.conversation?.contact_inbox?.inbox?.channel_type;\nconst account_id = payload.account?.id || 2;\nconst message_type = payload.message_type;\nconst created_at = payload.created_at;\n\n// Obtener contador de interacciones bot\nconst bot_count = payload.conversation?.custom_attributes?.bot_interaction_count || 0;\nconst last_bot_message = payload.conversation?.custom_attributes?.last_bot_message_at;\nconst contact_inboxes = payload.conversation?.contact_inbox;\nconst has_contact_inbox = !!contact_inboxes;\n\nreturn [{\n  json: {\n    message_text: (content || '').trim(),\n    conversation_id: conversation_id,\n    inbox_id: inbox_id,\n    inbox_id_api: 2,\n    inbox_id_db: 3,\n    clinic_id: clinic_id || 'default',\n    patient_id: patient_id,\n    contact_phone: contact_phone,\n    contact_id: contact_id,\n    account_id: account_id,\n    message_type: message_type,\n    message_timestamp: created_at,\n    bot_interaction_count: bot_count,\n    last_bot_message_at: last_bot_message,\n    sender_name: payload.sender?.name || 'Paciente',\n    sender_email: payload.sender?.email,\n    conversation_status: payload.conversation?.status,\n    has_contact_inbox: has_contact_inbox,\n    channel_type: channel_type || 'Channel::WebWidget',\n    raw_payload: payload\n  }\n}];\n"
+      },
+      "id": "code-validate",
+      "name": "Validar Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        432,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================\n// WHATSAPP SAFE RULES - FASE 1\n// ============================================\nconst bot_count = $json.bot_interaction_count || 0;\nconst message_lower = ($json.message_text || '').toLowerCase();\n\n// Regla 1: MÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ximo 1 interacciÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n automÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡tica en Fase 1\nif (bot_count >= 1) {\n  return [{\n    json: {\n      ...$json,\n      should_escalate: true,\n      escalation_reason: 'MAX_INTERACTIONS_PHASE1',\n      debug_rule: 'RULE_1_MAX_INTERACTIONS',\n      debug_bot_count: bot_count,\n      escalation_message: 'Te conecto con un agente de inmediato.'\n    }\n  }];\n}\n\n// Regla 2: Mensaje > 24h\nconst message_age_hours = (Date.now() - ($json.message_timestamp * 1000)) / (1000 * 60 * 60);\nif (message_age_hours > 24) {\n  return [{\n    json: {\n      ...$json,\n      should_escalate: true,\n      escalation_reason: 'MESSAGE_TOO_OLD',\n      debug_rule: 'RULE_2_MESSAGE_AGE',\n      debug_age_hours: message_age_hours,\n      escalation_message: 'Te conecto con un agente.'\n    }\n  }];\n}\n\n// Regla 3: Horario comercial (Lima, Peru)\nconst now = new Date();\nconst lima_hour = parseInt(now.toLocaleString('en-US', { \n  timeZone: 'America/Lima', \n  hour: 'numeric', \n  hour12: false \n}));\n\nif (lima_hour < 8 || lima_hour >= 22) {\n  return [{\n    json: {\n      ...$json,\n      should_escalate: true,\n      escalation_reason: 'OUTSIDE_BUSINESS_HOURS',\n      debug_rule: 'RULE_3_HOURS',\n      debug_lima_hour: lima_hour,\n      debug_now: now.toISOString(),\n      escalation_message: 'Gracias por escribirnos. Te responderemos en horario de atenciÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n (8am - 10pm).'\n    }\n  }];\n}\n\n// Regla 4: Emergencias\nconst emergency_keywords = [\n  'emergencia', 'urgencia', 'dolor fuerte', 'sangra', 'mucho dolor',\n  'me caÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­', 'golpe', 'accidente', 'no puedo', 'ayuda urgente',\n  'hinchazÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n', 'infecciÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n', 'fiebre'\n];\nconst is_emergency = emergency_keywords.some(kw => message_lower.includes(kw));\n\nif (is_emergency) {\n  return [{\n    json: {\n      ...$json,\n      should_escalate: true,\n      escalation_reason: 'EMERGENCY_DETECTED',\n      debug_rule: 'RULE_4_EMERGENCY',\n      escalation_message: 'Detecto que podrÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­as tener una urgencia. Te conecto de inmediato con nuestro equipo.',\n      priority: 'urgent'\n    }\n  }];\n}\n\n// Regla 5: Opt-out\nconst opt_out_keywords = ['detente', 'ya no', 'basta', 'stop', 'cancelar bot', 'agente', 'humano', 'persona'];\nconst wants_opt_out = opt_out_keywords.some(kw => message_lower.includes(kw));\n\nif (wants_opt_out) {\n  return [{\n    json: {\n      ...$json,\n      should_escalate: true,\n      escalation_reason: 'USER_OPT_OUT',\n      debug_rule: 'RULE_5_OPT_OUT',\n      escalation_message: 'Entendido. Te conecto con un agente humano.'\n    }\n  }];\n}\n\n// Todo OK - continuar al clasificador\nreturn [{\n  json: {\n    ...$json,\n    should_escalate: false,\n    whatsapp_safe: true,\n    debug_rule: 'NO_ESCALATION_ALL_OK',\n    debug_bot_count: bot_count,\n    debug_lima_hour: lima_hour,\n    checked_at: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "code-whatsapp-safe",
+      "name": "WhatsApp Safe Check",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "{{ $json.message_text }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are an intent classifier for SofIA dental clinic assistant.\n\nRESPOND ONLY with valid JSON:\n{\n  \"intent\": \"CREATE_EVENT\" | \"INFO\" | \"PAYMENT\" | \"HUMAN\",\n  \"confidence\": \"high\" | \"medium\" | \"low\"\n}\n\nRULES (in priority order):\n\n1. INFO (DEFAULT for most questions)\n   - Questions about: services, prices, hours, location, info\n   - Keywords: cuánto, cuesta, precio, dónde, horario, servicios\n   - Examples: \"Cuánto cuesta X?\", \"Qué servicios tienen?\"\n   - DEFAULT CHOICE when unsure\n\n2. CREATE_EVENT\n   - Only when EXPLICITLY wants appointment/cita\n   - Keywords: cita, agendar, reservar, cancelar\n   - Examples: \"Quiero una cita\", \"Agendar\"\n\n3. PAYMENT\n   - Only when mentions payment/money transaction\n   - Keywords: pagué, pago, transferencia\n   - Examples: \"Ya pagué\", \"Cómo pagar?\"\n\n4. HUMAN (last resort only)\n   - ONLY for: emergencies, complaints, insurance, invoices\n   - Keywords: emergencia, urgencia, dolor fuerte, queja, factura\n   - Examples: \"Emergencia\\!\", \"Necesito factura\"\n\nCRITICAL: Questions about prices/services = INFO, NOT HUMAN\\!"
+        }
+      },
+      "id": "agent-classifier",
+      "name": "Clasificador de Intención",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        1328,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4o-mini"
+        },
+        "options": {
+          "maxTokens": 50,
+          "temperature": 0.1
+        }
+      },
+      "id": "openai-model",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        1408,
+        512
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "SeCPLJI4mV6p2hJR",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================\n// NORMALIZAR OUTPUT DEL CLASIFICADOR\n// ============================================\nlet intent_data = $json.output || $json;\n\nif (typeof intent_data === 'string') {\n  try {\n    intent_data = JSON.parse(intent_data);\n  } catch (e) {\n    const text = intent_data.toLowerCase();\n    if (text.includes('create_event')) {\n      intent_data = { intent: 'CREATE_EVENT', confidence: 'low' };\n    } else if (text.includes('info')) {\n      intent_data = { intent: 'INFO', confidence: 'low' };\n    } else if (text.includes('payment')) {\n      intent_data = { intent: 'PAYMENT', confidence: 'low' };\n    } else {\n      intent_data = { intent: 'HUMAN', confidence: 'low' };\n    }\n  }\n}\n\nlet intent = (intent_data.intent || 'HUMAN').trim().toUpperCase();\nlet confidence = (intent_data.confidence || 'low').toLowerCase();\n\nconst valid_intents = ['CREATE_EVENT', 'INFO', 'PAYMENT', 'HUMAN'];\nif (!valid_intents.includes(intent)) {\n  intent = 'HUMAN';\n  confidence = 'low';\n}\n\nreturn [{\n  json: {\n    ...$json,\n    intent: intent,\n    confidence: confidence,\n    classified_at: new Date().toISOString(),\n    phase: 'PHASE_1_TESTING',\n    action: 'ESCALATE_TO_HUMAN'\n  }\n}];"
+      },
+      "id": "code-normalize",
+      "name": "Normalizar Intent",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1680,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Preservar TODOS los datos del input\nreturn [{\n  json: {\n    ...$json,\n    escalation_message_final: $json.escalation_message || 'Te conecto con un agente de nuestro equipo.',\n    escalation_reason_final: $json.escalation_reason || 'PHASE_1_' + $json.intent,\n    internal_note: 'SofIA (Fase 1) - Intent: ' + $json.intent,\n    is_urgent: $json.priority === 'urgent'\n  }\n}];"
+      },
+      "id": "set-prepare",
+      "name": "Preparar Escalado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3472,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://chat.redsolucionesti.com/api/v1/accounts/{{ $json.account_id }}/conversations/{{ $json.conversation_id }}/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "yypAwZDH2dV3crfbqJqWCgj1"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"content\": \"{{ $json.escalation_message_final }}\",\n  \"message_type\": \"outgoing\",\n  \"private\": false\n}",
+        "options": {}
+      },
+      "id": "http-send-message",
+      "name": "Enviar Mensaje Escalado",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3696,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://chat.redsolucionesti.com/api/v1/accounts/{{ $json.account_id }}/conversations/{{ $json.conversation_id }}/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "yypAwZDH2dV3crfbqJqWCgj1"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"content\": \"SofIA Bot - Fase 1\\n\\nIntencion: {{ $json.intent }}\\nConfianza: {{ $json.confidence }}\\nRazon: {{ $json.escalation_reason || \\\"Testing\\\" }}\\nMensaje: {{ $json.message_text }}\",\n  \"message_type\": \"outgoing\",\n  \"private\": true\n}",
+        "options": {}
+      },
+      "id": "http-note",
+      "name": "Crear Nota Interna",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3920,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://chat.redsolucionesti.com/api/v1/accounts/{{ $json.account_id }}/conversations/{{ $json.conversation_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "yypAwZDH2dV3crfbqJqWCgj1"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"custom_attributes\": {\n    \"bot_handled\": true,\n    \"intent_detected\": \"{{ $json.intent }}\",\n    \"confidence\": \"{{ $json.confidence }}\",\n    \"bot_interaction_count\": {{ ($json.bot_interaction_count || 0) + 1 }},\n    \"last_bot_message_at\": \"{{ $now.toISO() }}\",\n    \"escalation_reason\": \"{{ $json.escalation_reason_final }}\",\n    \"sofia_phase\": \"PHASE_1\"\n  }\n}",
+        "options": {}
+      },
+      "id": "http-attributes",
+      "name": "Actualizar Custom Attributes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4144,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'ok', processed: true, intent: $json.intent, conversation_id: $json.conversation_id }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "respond-webhook",
+      "name": "Responder OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        4368,
+        416
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================\n// KNOWLEDGE BASE - FASE 2\n// Base de conocimiento estática de la clínica\n// ============================================\n\nconst KNOWLEDGE_BASE = {\n  \"clinic_info\": {\n    \"name\": \"Clínica Dental SofIA Dent (Test)\",\n    \"address\": \"Av. Principal 123, San Isidro, Lima, Perú\",\n    \"phone\": \"+51 905 858 566\",\n    \"email\": \"info@redsolucionesti.com\",\n    \"website\": \"https://sofia-test.redsolucionesti.com\"\n  },\n  \"hours\": {\n    \"weekdays\": \"Lunes a Viernes: 9:00 AM - 7:00 PM\",\n    \"saturday\": \"Sábados: 9:00 AM - 2:00 PM\",\n    \"sunday\": \"Domingos: Cerrado\"\n  },\n  \"services\": [\n    {\n      \"name\": \"Limpieza dental\",\n      \"price_range\": \"S/ 80 - S/ 150\",\n      \"duration\": \"30-45 minutos\",\n      \"description\": \"Limpieza profesional con ultrasonido\"\n    },\n    {\n      \"name\": \"Blanqueamiento dental\",\n      \"price_range\": \"S/ 300 - S/ 500\",\n      \"duration\": \"60 minutos\",\n      \"description\": \"Blanqueamiento LED profesional\"\n    },\n    {\n      \"name\": \"Consulta general\",\n      \"price_range\": \"S/ 50 - S/ 80\",\n      \"duration\": \"30 minutos\",\n      \"description\": \"Evaluación completa con radiografía panorámica\"\n    },\n    {\n      \"name\": \"Ortodoncia\",\n      \"price_range\": \"S/ 2,500 - S/ 5,000\",\n      \"duration\": \"12-24 meses\",\n      \"description\": \"Brackets metálicos o estéticos. Incluye controles mensuales.\"\n    },\n    {\n      \"name\": \"Extracción simple\",\n      \"price_range\": \"S/ 100 - S/ 200\",\n      \"duration\": \"30 minutos\",\n      \"description\": \"Extracción de piezas dentales no complicadas\"\n    },\n    {\n      \"name\": \"Endodoncia (tratamiento de conducto)\",\n      \"price_range\": \"S/ 300 - S/ 600\",\n      \"duration\": \"60-90 minutos\",\n      \"description\": \"Tratamiento de conducto por pieza dental\"\n    },\n    {\n      \"name\": \"Implante dental\",\n      \"price_range\": \"S/ 2,000 - S/ 3,500\",\n      \"duration\": \"3-6 meses (proceso completo)\",\n      \"description\": \"Implante de titanio + corona. Requiere evaluación previa.\"\n    },\n    {\n      \"name\": \"Carillas dentales\",\n      \"price_range\": \"S/ 400 - S/ 800 por pieza\",\n      \"duration\": \"2-3 citas\",\n      \"description\": \"Carillas de resina o porcelana\"\n    }\n  ],\n  \"payment_methods\": [\n    \"Efectivo\",\n    \"Tarjeta de crédito/débito (Visa, Mastercard)\",\n    \"Transferencia bancaria (BCP, Interbank, BBVA)\",\n    \"Yape / Plin\"\n  ],\n  \"faq\": [\n    {\n      \"question\": \"¿Tienen estacionamiento?\",\n      \"answer\": \"Sí, contamos con estacionamiento gratuito para pacientes.\"\n    },\n    {\n      \"question\": \"¿Atienden emergencias?\",\n      \"answer\": \"Sí, atendemos emergencias dentales en horario de atención. Fuera de horario, comunícate al +51 905 858 566.\"\n    },\n    {\n      \"question\": \"¿Trabajan con seguros?\",\n      \"answer\": \"Trabajamos con Rímac, Pacífico y Mapfre. Consulta cobertura específica con nuestro equipo.\"\n    },\n    {\n      \"question\": \"¿Primera cita tiene costo?\",\n      \"answer\": \"La primera consulta de evaluación tiene un costo de S/ 50, que se descuenta si inicias tu tratamiento con nosotros.\"\n    }\n  ]\n};\n\n// Pasar datos al siguiente nodo\nreturn [{\n  json: {\n    ...($json || {}),\n    knowledge_base: KNOWLEDGE_BASE,\n    clinic_name: KNOWLEDGE_BASE.clinic_info.name,\n    knowledge_base_json: JSON.stringify(KNOWLEDGE_BASE, null, 2)\n  }\n}];\n"
+      },
+      "id": "code-knowledge-base",
+      "name": "Knowledge Base",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2128,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Preparar prompt para LLM\nconst knowledge_base_json = $json.knowledge_base_json;\nconst message_text = $json.message_text;\nconst clinic_name = $json.clinic_name;\n\nconst system_prompt = `Eres SofIA, asistente virtual de la clínica dental ${clinic_name}.\nTu tarea es responder la pregunta del paciente usando ÚNICAMENTE la información proporcionada.\n\nINFORMACIÓN DE LA CLÍNICA:\n${knowledge_base_json}\n\nREGLAS:\n1. Responde SOLO con información que esté en la base de conocimiento\n2. Si la información no está disponible, di EXACTAMENTE: \"No tengo esa información disponible. Te conecto con un agente para ayudarte mejor.\"\n3. Sé amable, conciso y profesional\n4. No inventes precios, horarios ni servicios\n5. Si el paciente pregunta algo que requiere evaluación médica, sugiere agendar una cita\n6. Máximo 3 oraciones\n7. Responde en español\n8. Al final de tu respuesta, siempre pregunta: \"¿Hay algo más en lo que pueda ayudarte?\"`;\n\nconst user_prompt = `PREGUNTA DEL PACIENTE:\n${message_text}`;\n\nreturn [{\n  json: {\n    ...($json || {}),\n    system_prompt: system_prompt,\n    user_prompt: user_prompt\n  }\n}];\n"
+      },
+      "id": "code-prepare-prompt",
+      "name": "Preparar Prompt INFO",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2352,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"gpt-4o-mini\",\n  \"messages\": [\n    {\"role\": \"system\", \"content\": {{ JSON.stringify($json.system_prompt) }}},\n    {\"role\": \"user\", \"content\": {{ JSON.stringify($json.user_prompt) }}}\n  ],\n  \"temperature\": 0.3,\n  \"max_tokens\": 500\n}",
+        "options": {}
+      },
+      "id": "http-call-openai",
+      "name": "Llamar OpenAI API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        2576,
+        368
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "SeCPLJI4mV6p2hJR",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extraer respuesta del LLM\nconst response = $json;\n\n// La respuesta de OpenAI viene en response.choices[0].message.content\nconst llm_response = response.choices?.[0]?.message?.content || '';\n\n// Obtener datos originales del nodo \"Preparar Prompt INFO\"\nconst original_data = $node[\"Preparar Prompt INFO\"].json;\n\nreturn [{\n  json: {\n    ...original_data,  // Todos los datos originales (conversation_id, account_id, etc.)\n    llm_response: llm_response.trim()\n  }\n}];"
+      },
+      "id": "code-extract-response",
+      "name": "Extraer Respuesta LLM",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2800,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================\n// VALIDACION ANTI-ALUCINACION\n// ============================================\n\nconst llm_response = $json.llm_response || '';\n\n// Flags de validación\nlet should_escalate = false;\nlet escalation_reason = '';\n\n// Regla 1: Respuesta muy larga (>500 chars)\nif (llm_response.length > 500) {\n  should_escalate = true;\n  escalation_reason = 'Respuesta LLM muy larga (>500 chars)';\n}\n\n// Regla 2: LLM dice que no tiene información\nconst no_info_keywords = [\n  'no tengo esa información',\n  'no dispongo',\n  'no cuento con',\n  'no tengo información',\n  'no está disponible',\n  'te conecto con un agente'\n];\n\nfor (const keyword of no_info_keywords) {\n  if (llm_response.toLowerCase().includes(keyword)) {\n    should_escalate = true;\n    escalation_reason = 'LLM indica falta de información';\n    break;\n  }\n}\n\n// Regla 3: Respuesta vacía o muy corta\nif (llm_response.length < 10) {\n  should_escalate = true;\n  escalation_reason = 'Respuesta LLM vacía o muy corta';\n}\n\nreturn [{\n  json: {\n    ...($json || {}),\n    should_escalate_info: should_escalate,\n    escalation_reason_info: escalation_reason,\n    validation_passed: !should_escalate\n  }\n}];\n"
+      },
+      "id": "code-validate-response",
+      "name": "Validar Respuesta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3024,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "{{ $json.validation_passed }}",
+              "value2": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "if-valid-response",
+      "name": "¿Respuesta Válida?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        3248,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://chat.redsolucionesti.com/api/v1/accounts/{{ $json.account_id }}/conversations/{{ $json.conversation_id }}/messages",
+        "options": {},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"content\": {{ JSON.stringify($json.llm_response) }},\n  \"message_type\": \"outgoing\",\n  \"private\": false\n}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "yypAwZDH2dV3crfbqJqWCgj1"
+            }
+          ]
+        }
+      },
+      "id": "http-send-info-response",
+      "name": "Enviar Respuesta INFO",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        3696,
+        416
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://chat.redsolucionesti.com/api/v1/accounts/{{ $json.account_id }}/conversations/{{ $json.conversation_id }}/messages",
+        "options": {},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"content\": \"[Fase 2] Pregunta: {{ $json.user_prompt }}\\nRespuesta enviada OK\",\n  \"message_type\": \"outgoing\",\n  \"private\": true\n}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "yypAwZDH2dV3crfbqJqWCgj1"
+            }
+          ]
+        }
+      },
+      "id": "http-create-note-info",
+      "name": "Crear Nota Interna INFO",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        3920,
+        416
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://chat.redsolucionesti.com/api/v1/accounts/{{ $json.account_id }}/conversations/{{ $json.conversation_id }}",
+        "options": {},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"custom_attributes\": {\n    \"sofia_phase\": \"PHASE_2_INFO\",\n    \"bot_interaction_count\": {{ ($json.bot_interaction_count || 0) + 1 }},\n    \"last_bot_message_at\": \"{{ $now.toISO() }}\"\n  }\n}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "yypAwZDH2dV3crfbqJqWCgj1"
+            }
+          ]
+        }
+      },
+      "id": "http-update-attributes-info",
+      "name": "Actualizar Attributes INFO",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        4144,
+        416
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {},
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "d37a74ac-c471-4457",
+              "leftValue": "={{ $json.intent }}",
+              "rightValue": "INFO",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "if-check-info-intent",
+      "name": "Check INFO Intent",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1904,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {},
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "783d23a7-79df-43ce",
+              "leftValue": "={{ $json.message_type }}",
+              "rightValue": "incoming",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "if-is-user-message",
+      "name": "IsUserMessage",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        656,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "expression",
+        "output": "input",
+        "rules": {
+          "rules": [
+            {
+              "id": "1",
+              "outputKey": "0",
+              "conditions": [
+                {
+                  "leftValue": "={{ $json.intent }}",
+                  "rightValue": "CREATE_EVENT",
+                  "operator": {
+                    "type": "string",
+                    "operation": "equals"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "2",
+              "outputKey": "1",
+              "conditions": [
+                {
+                  "leftValue": "={{ $json.intent }}",
+                  "rightValue": "INFO",
+                  "operator": {
+                    "type": "string",
+                    "operation": "equals"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "3",
+              "outputKey": "2",
+              "conditions": [
+                {
+                  "leftValue": "={{ $json.intent }}",
+                  "rightValue": "PAYMENT",
+                  "operator": {
+                    "type": "string",
+                    "operation": "equals"
+                  }
+                }
+              ]
+            }
+          ],
+          "options": {
+            "fallbackOutput": "3"
+          }
+        }
+      },
+      "id": "switch-router",
+      "name": "Router de Intención",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        1904,
+        288
+      ]
+    }
+  ],
+  "connections": {
+    "Chatwoot Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validar Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar Input": {
+      "main": [
+        [
+          {
+            "node": "IsUserMessage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WhatsApp Safe Check": {
+      "main": [
+        [
+          {
+            "node": "Clasificador de Intención",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clasificador de Intención": {
+      "main": [
+        [
+          {
+            "node": "Normalizar Intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Clasificador de Intención",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar Intent": {
+      "main": [
+        [
+          {
+            "node": "Check INFO Intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Router de Intención": {
+      "main": [
+        [
+          {
+            "node": "Preparar Escalado",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Knowledge Base",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Preparar Escalado",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Preparar Escalado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Knowledge Base": {
+      "main": [
+        [
+          {
+            "node": "Preparar Prompt INFO",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Prompt INFO": {
+      "main": [
+        [
+          {
+            "node": "Llamar OpenAI API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Llamar OpenAI API": {
+      "main": [
+        [
+          {
+            "node": "Extraer Respuesta LLM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraer Respuesta LLM": {
+      "main": [
+        [
+          {
+            "node": "Validar Respuesta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar Respuesta": {
+      "main": [
+        [
+          {
+            "node": "¿Respuesta Válida?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Respuesta Válida?": {
+      "main": [
+        [
+          {
+            "node": "Enviar Respuesta INFO",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Preparar Escalado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar Respuesta INFO": {
+      "main": [
+        [
+          {
+            "node": "Crear Nota Interna INFO",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Crear Nota Interna INFO": {
+      "main": [
+        [
+          {
+            "node": "Actualizar Attributes INFO",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Actualizar Attributes INFO": {
+      "main": [
+        [
+          {
+            "node": "Responder OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Escalado": {
+      "main": [
+        [
+          {
+            "node": "Enviar Mensaje Escalado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar Mensaje Escalado": {
+      "main": [
+        [
+          {
+            "node": "Crear Nota Interna",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Crear Nota Interna": {
+      "main": [
+        [
+          {
+            "node": "Actualizar Custom Attributes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Actualizar Custom Attributes": {
+      "main": [
+        [
+          {
+            "node": "Responder OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check INFO Intent": {
+      "main": [
+        [
+          {
+            "node": "Knowledge Base",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Preparar Escalado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IsUserMessage": {
+      "main": [
+        [
+          {
+            "node": "WhatsApp Safe Check",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "staticData": null
+}

@@ -1,0 +1,14 @@
+{
+  "parameters": {
+    "mode": "expression",
+    "output": "input"
+  },
+  "id": "switch-router",
+  "name": "Router de Intención",
+  "type": "n8n-nodes-base.switch",
+  "typeVersion": 3,
+  "position": [
+    1680,
+    128
+  ]
+}

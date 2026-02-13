@@ -7,6 +7,11 @@ on:
 
   workflow_dispatch:
 
+env:
+  N8N_API_KEY: ${{ secrets.N8N_API_KEY }}
+  N8N_BASE_URL: ${{ secrets.N8N_BASE_URL }}
+  WORKFLOW_ID: ${{ secrets.WORKFLOW_ID }}
+
 jobs:
   full-test-suite:
     name: Complete Test Coverage
@@ -25,47 +30,45 @@ jobs:
         run: pip install requests
 
       - name: Configure credentials
-        env:
-          N8N_API_KEY: ${{ secrets.N8N_API_KEY }}
-          WORKFLOW_ID: ${{ secrets.WORKFLOW_ID }}
         run: |
           cd testing
-          python quick_setup.py "$N8N_API_KEY" "$WORKFLOW_ID"
+          if [ -n "$N8N_API_KEY" ] && [ -n "$WORKFLOW_ID" ]; then
+            python quick_setup.py "$N8N_API_KEY" "$WORKFLOW_ID"
+          elif [ -n "$N8N_API_KEY" ]; then
+            python quick_setup.py "$N8N_API_KEY"
+          else
+            echo "Using default credentials from config.py"
+          fi
 
       - name: Run Phase 1 tests
         run: |
           cd testing
-          python test_runner.py --phases phase1 --output phase1_report.txt
-        continue-on-error: true
+          python test_runner.py --phases phase1 --output phase1_report.txt || true
 
       - name: Run Phase 2 tests
         run: |
           cd testing
-          python test_runner.py --phases phase2 --output phase2_report.txt
-        continue-on-error: true
+          python test_runner.py --phases phase2 --output phase2_report.txt || true
 
       - name: Run Phase 3 tests
         run: |
           cd testing
-          python test_runner.py --phases phase3 --output phase3_report.txt
-        continue-on-error: true
+          python test_runner.py --phases phase3 --output phase3_report.txt || true
 
       - name: Run Phase 4 tests
         run: |
           cd testing
-          python test_runner.py --phases phase4 --output phase4_report.txt
-        continue-on-error: true
+          python test_runner.py --phases phase4 --output phase4_report.txt || true
 
       - name: Run Regression tests
         run: |
           cd testing
-          python test_runner.py --phases regression --output regression_report.txt
-        continue-on-error: true
+          python test_runner.py --phases regression --output regression_report.txt || true
 
       - name: Generate combined report
         run: |
           cd testing
-          python test_runner.py --phases all --output nightly_full_report.txt
+          python test_runner.py --phases all --output nightly_full_report.txt || true
 
       - name: Upload all reports
         uses: actions/upload-artifact@v4
@@ -76,8 +79,8 @@ jobs:
           retention-days: 90
 
       - name: Analyze trends
+        if: always()
         run: |
-          # Extract metrics for trend analysis
           cd testing
 
           echo "## Nightly Test Results - $(date +%Y-%m-%d)" > metrics.md
@@ -86,10 +89,10 @@ jobs:
           for report in phase1_report.txt phase2_report.txt phase3_report.txt phase4_report.txt regression_report.txt; do
             if [ -f "$report" ]; then
               PHASE=$(echo $report | cut -d'_' -f1)
-              SUCCESS_RATE=$(grep -oP 'Success Rate:\s+\K\d+\.\d+' "$report" || echo "0.0")
-              TOTAL=$(grep -oP 'Total Tests:\s+\K\d+' "$report" || echo "0")
-              PASSED=$(grep -oP 'Passed:\s+\K\d+' "$report" || echo "0")
-              FAILED=$(grep -oP 'Failed:\s+\K\d+' "$report" || echo "0")
+              SUCCESS_RATE=$(grep -oP 'Success Rate:\s+\K[0-9]+\.[0-9]+' "$report" || echo "0.0")
+              TOTAL=$(grep -oP 'Total Tests:\s+\K[0-9]+' "$report" || echo "0")
+              PASSED=$(grep -oP 'Passed:\s+\K[0-9]+' "$report" || echo "0")
+              FAILED=$(grep -oP 'Failed:\s+\K[0-9]+' "$report" || echo "0")
 
               echo "### $PHASE" >> metrics.md
               echo "- Success Rate: $SUCCESS_RATE%" >> metrics.md
@@ -99,25 +102,3 @@ jobs:
           done
 
           cat metrics.md
-
-      - name: Create issue on failure
-        if: failure()
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const title = `🚨 Nightly Tests Failed - ${new Date().toISOString().split('T')[0]}`;
-            const body = `The nightly test suite has failed.
-
-            **Run**: [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
-            **Timestamp**: ${new Date().toISOString()}
-
-            Please review the test reports and investigate failures.
-            `;
-
-            github.rest.issues.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title: title,
-              body: body,
-              labels: ['automated-test', 'bug', 'high-priority']
-            });

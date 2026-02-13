@@ -1,0 +1,186 @@
+-- ============================================================
+-- SOFIA SaaS - API Endpoints via Supabase Edge Functions
+-- These are Supabase RPC calls + REST endpoints
+-- ============================================================
+
+-- ============================================================
+-- ENDPOINT 1: GET /dashboard/metrics
+-- Implementation: Supabase RPC call to get_dashboard_metrics
+--
+-- Usage from dashboard frontend:
+--   supabase.rpc('get_dashboard_metrics', {
+--       p_clinic_id: 'uuid-here',
+--       p_period_days: 7
+--   })
+--
+-- Usage from curl:
+--   curl -X POST \
+--     'https://YOUR_PROJECT.supabase.co/rest/v1/rpc/get_dashboard_metrics' \
+--     -H 'apikey: YOUR_ANON_KEY' \
+--     -H 'Authorization: Bearer USER_JWT' \
+--     -H 'Content-Type: application/json' \
+--     -d '{"p_clinic_id": "uuid", "p_period_days": 7}'
+--
+-- Response:
+-- {
+--   "period_days": 7,
+--   "period_start": "2026-02-06T00:00:00Z",
+--   "period_end": "2026-02-13T00:00:00Z",
+--   "total_conversations": 145,
+--   "total_bookings": 32,
+--   "conversion_rate": 22.1,
+--   "escalation_rate": 15.2,
+--   "cancellation_rate": 6.3,
+--   "avg_response_time_ms": 1250,
+--   "intent_distribution": {
+--     "INFO": 78,
+--     "CREATE_EVENT": 42,
+--     "PAYMENT": 15,
+--     "HUMAN": 10
+--   },
+--   "phase_distribution": {"1": 85, "2": 30, "3": 20, "4": 10},
+--   "daily_conversations": [
+--     {"date": "2026-02-07", "total": 20, "booked": 5, "escalated": 3},
+--     ...
+--   ]
+-- }
+-- ============================================================
+
+
+-- ============================================================
+-- ENDPOINT 2: POST /appointments/:id/cancel
+-- Implementation: Supabase RPC call to cancel_appointment
+--
+-- Usage:
+--   supabase.rpc('cancel_appointment', {
+--       p_appointment_id: 'uuid-here',
+--       p_reason: 'Patient requested cancellation'
+--   })
+--
+-- n8n HTTP Request:
+--   POST https://YOUR_PROJECT.supabase.co/rest/v1/rpc/cancel_appointment
+--   Body: {"p_appointment_id": "uuid", "p_reason": "reason"}
+--
+-- Response (success):
+-- {
+--   "success": true,
+--   "appointment_id": "uuid",
+--   "calendar_event_id": "google-calendar-event-id",
+--   "clinic_id": "uuid",
+--   "patient_name": "Juan Perez",
+--   "service": "Limpieza dental",
+--   "start_time": "2026-02-15T10:00:00Z"
+-- }
+--
+-- After cancellation, n8n should:
+--   1. Delete Google Calendar event using calendar_event_id
+--   2. Send cancellation confirmation via Chatwoot
+-- ============================================================
+
+
+-- ============================================================
+-- ENDPOINT 3: Knowledge Base CRUD
+-- Implementation: Direct Supabase REST on knowledge_base table
+--
+-- LIST (filtered by clinic):
+--   GET /rest/v1/knowledge_base?clinic_id=eq.UUID&active=eq.true&order=priority.desc
+--
+-- CREATE:
+--   POST /rest/v1/knowledge_base
+--   Body: {"clinic_id": "uuid", "category": "precios", "question": "...", "answer": "..."}
+--
+-- UPDATE:
+--   PATCH /rest/v1/knowledge_base?id=eq.UUID
+--   Body: {"answer": "updated answer", "active": true}
+--
+-- DELETE (soft):
+--   PATCH /rest/v1/knowledge_base?id=eq.UUID
+--   Body: {"active": false}
+--
+-- SEARCH (for n8n INFO flow):
+--   supabase.rpc('search_knowledge_base', {
+--       p_clinic_id: 'uuid',
+--       p_query: 'cuanto cuesta limpieza',
+--       p_limit: 5
+--   })
+-- ============================================================
+
+
+-- ============================================================
+-- ENDPOINT 4: Appointments CRUD
+-- Implementation: Direct Supabase REST on appointments table
+--
+-- LIST upcoming:
+--   GET /rest/v1/appointments?clinic_id=eq.UUID&status=in.(scheduled,confirmed)&start_time=gte.NOW&order=start_time
+--
+-- CREATE (called by n8n after Google Calendar event creation):
+--   POST /rest/v1/appointments
+--   Body: {
+--     "clinic_id": "uuid",
+--     "conversation_id": 123,
+--     "patient_name": "Juan Perez",
+--     "phone": "+51999999999",
+--     "service": "Limpieza dental",
+--     "start_time": "2026-02-15T10:00:00Z",
+--     "end_time": "2026-02-15T11:00:00Z",
+--     "calendar_event_id": "google-event-id"
+--   }
+--
+-- CANCEL:
+--   Use cancel_appointment RPC (see Endpoint 2)
+--
+-- COMPLETE (after appointment time passes):
+--   PATCH /rest/v1/appointments?id=eq.UUID
+--   Body: {"status": "completed"}
+-- ============================================================
+
+
+-- ============================================================
+-- ENDPOINT 5: Clinic Configuration
+-- Implementation: Direct Supabase REST on clinics table
+--
+-- GET current clinic:
+--   GET /rest/v1/clinics?id=eq.UUID&select=*
+--
+-- UPDATE bot config:
+--   PATCH /rest/v1/clinics?id=eq.UUID
+--   Body: {"bot_config": {"max_bot_interactions": 5, ...}}
+--
+-- UPDATE branding:
+--   PATCH /rest/v1/clinics?id=eq.UUID
+--   Body: {"branding_config": {"primary_color": "#FF0000"}}
+-- ============================================================
+
+
+-- ============================================================
+-- ENDPOINT 6: Reminders (internal, called by n8n)
+--
+-- GET pending reminders:
+--   supabase.rpc('get_pending_reminders')
+--
+-- MARK as sent:
+--   supabase.rpc('mark_reminder_sent', {
+--       p_appointment_id: 'uuid',
+--       p_status: 'sent'
+--   })
+-- ============================================================
+
+
+-- ============================================================
+-- ENDPOINT 7: Resolve Clinic (called by n8n at conversation start)
+--
+-- Usage:
+--   supabase.rpc('resolve_clinic', {
+--       p_inbox_id: 2,
+--       p_account_id: 2
+--   })
+--
+-- Response:
+-- {
+--   "clinic_id": "uuid",
+--   "clinic_name": "Clinica Dental...",
+--   "calendar_id": "google-calendar-id",
+--   "timezone": "America/Lima",
+--   "bot_config": {...}
+-- }
+-- ============================================================

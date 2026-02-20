@@ -5,7 +5,8 @@
 
 -- Enable required extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-CREATE EXTENSION IF NOT EXISTS "pg_trgm";  -- For text search on knowledge_base
+CREATE EXTENSION IF NOT EXISTS "pg_trgm";     -- For text search on knowledge_base
+CREATE EXTENSION IF NOT EXISTS "btree_gist";  -- For EXCLUDE constraint on appointments
 
 -- ============================================================
 -- ENUM TYPES

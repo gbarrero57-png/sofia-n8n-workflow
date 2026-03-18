@@ -1,28 +1,80 @@
-name: Nightly Full Test Suite
+name: SofIA Nightly Health Check
 
 on:
   schedule:
-    # Run at 2 AM UTC every day
-    - cron: '0 2 * * *'
-
+    # 2 AM Lima time = 7 AM UTC
+    - cron: '0 7 * * *'
   workflow_dispatch:
 
-env:
-  N8N_API_KEY: ${{ secrets.N8N_API_KEY }}
-  N8N_BASE_URL: ${{ secrets.N8N_BASE_URL }}
-  WORKFLOW_ID: ${{ secrets.WORKFLOW_ID }}
-
 jobs:
-  full-test-suite:
-    name: Complete Test Coverage
+  # ── Job 1: Supabase + Portal API tests (Node.js) ────────────────────────────
+  test-supabase-portal:
+    name: Supabase + Portal API
     runs-on: ubuntu-latest
+    outputs:
+      passed:   ${{ steps.results.outputs.passed }}
+      failed:   ${{ steps.results.outputs.failed }}
+      failures: ${{ steps.results.outputs.failures }}
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Run patients / governance / portal tests
+        run: node saas/test_patients_full.js 2>&1 | tee /tmp/node_output.txt
+        continue-on-error: true
+        env:
+          SUPABASE_URL:         https://inhyrrjidhzrbqecnptn.supabase.co
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          CLINIC_ID:            56b0cf1c-2ab6-4e03-b989-044701e47271
+          ADMIN_USER_ID:        88c478fc-1733-4184-a912-955e67794031
+          PORTAL_URL:           sofia.redsolucionesti.com
+          ADMIN_EMAIL:          ${{ secrets.SUPABASE_ADMIN_EMAIL }}
+          ADMIN_PASS:           ${{ secrets.SUPABASE_ADMIN_PASS }}
+
+      - name: Parse results
+        id: results
+        if: always()
+        run: |
+          if [ -f test_results.json ]; then
+            PASSED=$(node -e "process.stdout.write(String(require('./test_results.json').passed))")
+            FAILED=$(node -e "process.stdout.write(String(require('./test_results.json').failed))")
+            FAILURES=$(node -e "
+              const r = require('./test_results.json');
+              process.stdout.write(r.failures.map(f => '• ' + f.name).join('\n').substring(0, 500));
+            ")
+          else
+            PASSED=0
+            FAILED=1
+            FAILURES="• Script crashed (no results file)"
+          fi
+          echo "passed=$PASSED" >> $GITHUB_OUTPUT
+          echo "failed=$FAILED"  >> $GITHUB_OUTPUT
+          printf 'failures<<EOF\n%s\nEOF\n' "$FAILURES" >> $GITHUB_OUTPUT
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: supabase-portal-results
+          path: |
+            test_results.json
+            /tmp/node_output.txt
+          retention-days: 30
+
+  # ── Job 2: n8n Workflow tests (Python) ──────────────────────────────────────
+  test-n8n-workflow:
+    name: n8n Workflow (Sofia bot)
+    runs-on: ubuntu-latest
+    outputs:
+      passed: ${{ steps.results.outputs.passed }}
+      failed: ${{ steps.results.outputs.failed }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
@@ -32,73 +84,132 @@ jobs:
       - name: Configure credentials
         run: |
           cd testing
-          if [ -n "$N8N_API_KEY" ] && [ -n "$WORKFLOW_ID" ]; then
-            python quick_setup.py "$N8N_API_KEY" "$WORKFLOW_ID"
-          elif [ -n "$N8N_API_KEY" ]; then
-            python quick_setup.py "$N8N_API_KEY"
-          else
-            echo "Using default credentials from config.py"
+          if [ -n "${{ secrets.N8N_API_KEY }}" ] && [ -n "${{ secrets.WORKFLOW_ID }}" ]; then
+            python quick_setup.py "${{ secrets.N8N_API_KEY }}" "${{ secrets.WORKFLOW_ID }}"
+          elif [ -n "${{ secrets.N8N_API_KEY }}" ]; then
+            python quick_setup.py "${{ secrets.N8N_API_KEY }}"
           fi
 
-      - name: Run Phase 1 tests
+      - name: Run full test suite
         run: |
           cd testing
-          python test_runner.py --phases phase1 --output phase1_report.txt || true
+          python test_runner.py --phases all --output nightly_report.txt 2>&1 | tee /tmp/python_output.txt
+        continue-on-error: true
 
-      - name: Run Phase 2 tests
+      - name: Parse results
+        id: results
+        if: always()
         run: |
           cd testing
-          python test_runner.py --phases phase2 --output phase2_report.txt || true
+          if [ -f nightly_report.txt ]; then
+            PASSED=$(grep -oP 'Passed:\s+\K[0-9]+' nightly_report.txt | tail -1 || echo "0")
+            FAILED=$(grep -oP 'Failed:\s+\K[0-9]+' nightly_report.txt | tail -1 || echo "0")
+          else
+            PASSED=0; FAILED=1
+          fi
+          echo "passed=$PASSED" >> $GITHUB_OUTPUT
+          echo "failed=$FAILED"  >> $GITHUB_OUTPUT
 
-      - name: Run Phase 3 tests
-        run: |
-          cd testing
-          python test_runner.py --phases phase3 --output phase3_report.txt || true
-
-      - name: Run Phase 4 tests
-        run: |
-          cd testing
-          python test_runner.py --phases phase4 --output phase4_report.txt || true
-
-      - name: Run Regression tests
-        run: |
-          cd testing
-          python test_runner.py --phases regression --output regression_report.txt || true
-
-      - name: Generate combined report
-        run: |
-          cd testing
-          python test_runner.py --phases all --output nightly_full_report.txt || true
-
-      - name: Upload all reports
+      - name: Upload report
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: nightly-test-reports-${{ github.run_number }}
-          path: testing/*_report.txt
-          retention-days: 90
+          name: n8n-workflow-results
+          path: |
+            testing/nightly_report.txt
+            /tmp/python_output.txt
+          retention-days: 30
 
-      - name: Analyze trends
-        if: always()
+  # ── Job 3: Telegram notification (solo en fallos) ───────────────────────────
+  notify:
+    name: Telegram Notification
+    runs-on: ubuntu-latest
+    needs: [test-supabase-portal, test-n8n-workflow]
+    if: |
+      always() && (
+        needs.test-supabase-portal.result == 'failure' ||
+        needs.test-n8n-workflow.result    == 'failure'
+      )
+
+    steps:
+      - name: Send Telegram alert
         run: |
-          cd testing
+          python3 - <<'PYEOF'
+          import os, urllib.request, urllib.parse, json
 
-          echo "## Nightly Test Results - $(date +%Y-%m-%d)" > metrics.md
-          echo "" >> metrics.md
+          token    = os.environ['TELEGRAM_BOT_TOKEN']
+          chat_id  = os.environ['TELEGRAM_CHAT_ID']
+          run_url  = os.environ['RUN_URL']
 
-          for report in phase1_report.txt phase2_report.txt phase3_report.txt phase4_report.txt regression_report.txt; do
-            if [ -f "$report" ]; then
-              PHASE=$(echo $report | cut -d'_' -f1)
-              SUCCESS_RATE=$(grep -oP 'Success Rate:\s+\K[0-9]+\.[0-9]+' "$report" || echo "0.0")
-              TOTAL=$(grep -oP 'Total Tests:\s+\K[0-9]+' "$report" || echo "0")
-              PASSED=$(grep -oP 'Passed:\s+\K[0-9]+' "$report" || echo "0")
-              FAILED=$(grep -oP 'Failed:\s+\K[0-9]+' "$report" || echo "0")
+          sp_status  = os.environ.get('SP_STATUS',  'unknown')
+          n8n_status = os.environ.get('N8N_STATUS', 'unknown')
+          sp_passed  = os.environ.get('SP_PASSED',  '?')
+          sp_failed  = os.environ.get('SP_FAILED',  '?')
+          n8n_passed = os.environ.get('N8N_PASSED', '?')
+          n8n_failed = os.environ.get('N8N_FAILED', '?')
+          failures   = os.environ.get('FAILURES',   '')
 
-              echo "### $PHASE" >> metrics.md
-              echo "- Success Rate: $SUCCESS_RATE%" >> metrics.md
-              echo "- Total: $TOTAL | Passed: $PASSED | Failed: $FAILED" >> metrics.md
-              echo "" >> metrics.md
-            fi
-          done
+          from datetime import datetime
+          import subprocess
+          date_str = subprocess.check_output(
+              ['date', '+%d/%m/%Y %H:%M'],
+              env={**os.environ, 'TZ': 'America/Lima'}
+          ).decode().strip()
 
-          cat metrics.md
+          lines = [
+              '🚨 <b>SofIA Health Check — FALLA</b>',
+              '',
+              f'📅 {date_str} (Lima)',
+              '─────────────────────',
+          ]
+
+          if sp_status == 'failure':
+              lines.append(f'❌ <b>Supabase + Portal</b>: {sp_failed} fallo(s) / {sp_passed} ok')
+              if failures.strip():
+                  for line in failures.strip().split('\n'):
+                      lines.append(f'  {line}')
+          else:
+              lines.append(f'✅ <b>Supabase + Portal</b>: OK ({sp_passed} tests)')
+
+          if n8n_status == 'failure':
+              lines.append(f'❌ <b>n8n Workflow</b>: {n8n_failed} fallo(s) / {n8n_passed} ok')
+          else:
+              lines.append(f'✅ <b>n8n Workflow</b>: OK ({n8n_passed} tests)')
+
+          lines += [
+              '─────────────────────',
+              f'🔗 <a href="{run_url}">Ver detalles en GitHub</a>',
+          ]
+
+          text = '\n'.join(lines)
+
+          data = urllib.parse.urlencode({
+              'chat_id': chat_id,
+              'text': text,
+              'parse_mode': 'HTML',
+              'disable_web_page_preview': 'true',
+          }).encode()
+
+          req = urllib.request.Request(
+              f'https://api.telegram.org/bot{token}/sendMessage',
+              data=data
+          )
+          with urllib.request.urlopen(req) as resp:
+              result = json.loads(resp.read())
+              if result.get('ok'):
+                  print('✅ Telegram notification sent')
+              else:
+                  print(f'❌ Telegram error: {result}')
+                  exit(1)
+          PYEOF
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
+          RUN_URL:            ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          SP_STATUS:          ${{ needs.test-supabase-portal.result }}
+          N8N_STATUS:         ${{ needs.test-n8n-workflow.result }}
+          SP_PASSED:          ${{ needs.test-supabase-portal.outputs.passed }}
+          SP_FAILED:          ${{ needs.test-supabase-portal.outputs.failed }}
+          N8N_PASSED:         ${{ needs.test-n8n-workflow.outputs.passed }}
+          N8N_FAILED:         ${{ needs.test-n8n-workflow.outputs.failed }}
+          FAILURES:           ${{ needs.test-supabase-portal.outputs.failures }}

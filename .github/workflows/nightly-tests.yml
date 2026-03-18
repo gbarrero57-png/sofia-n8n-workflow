@@ -86,9 +86,9 @@ jobs:
         run: |
           cd testing
           if [ -n "${{ secrets.N8N_API_KEY }}" ] && [ -n "${{ secrets.WORKFLOW_ID }}" ]; then
-            python quick_setup.py "${{ secrets.N8N_API_KEY }}" "${{ secrets.WORKFLOW_ID }}"
+            python3 quick_setup.py "${{ secrets.N8N_API_KEY }}" "${{ secrets.WORKFLOW_ID }}"
           elif [ -n "${{ secrets.N8N_API_KEY }}" ]; then
-            python quick_setup.py "${{ secrets.N8N_API_KEY }}"
+            python3 quick_setup.py "${{ secrets.N8N_API_KEY }}"
           else
             echo "Using default API key from config.py"
           fi
@@ -96,7 +96,7 @@ jobs:
       - name: Run full test suite
         run: |
           cd testing
-          python test_runner.py --phases all --output nightly_report.txt 2>&1 | tee /tmp/python_output.txt || true
+          python3 test_runner.py --phases regression --output nightly_report.txt 2>&1 | tee python_output.txt || true
         continue-on-error: true
 
       - name: Parse results
@@ -120,7 +120,7 @@ jobs:
           name: n8n-workflow-results
           path: |
             testing/nightly_report.txt
-            /tmp/python_output.txt
+            testing/python_output.txt
           retention-days: 30
 
   # ── Job 3: Telegram notification (solo en fallos) ───────────────────────────

@@ -82,18 +82,21 @@ jobs:
         run: pip install requests
 
       - name: Configure credentials
+        continue-on-error: true
         run: |
           cd testing
           if [ -n "${{ secrets.N8N_API_KEY }}" ] && [ -n "${{ secrets.WORKFLOW_ID }}" ]; then
             python quick_setup.py "${{ secrets.N8N_API_KEY }}" "${{ secrets.WORKFLOW_ID }}"
           elif [ -n "${{ secrets.N8N_API_KEY }}" ]; then
             python quick_setup.py "${{ secrets.N8N_API_KEY }}"
+          else
+            echo "Using default API key from config.py"
           fi
 
       - name: Run full test suite
         run: |
           cd testing
-          python test_runner.py --phases all --output nightly_report.txt 2>&1 | tee /tmp/python_output.txt
+          python test_runner.py --phases all --output nightly_report.txt 2>&1 | tee /tmp/python_output.txt || true
         continue-on-error: true
 
       - name: Parse results

@@ -262,8 +262,8 @@ def analyze_execution(execution: Dict[str, Any]) -> Dict[str, Any]:
 
     return {
         "success": len(errors) == 0,
-        "finished": data.get("finished", False),
-        "status": data.get("status", "unknown"),
+        "finished": execution.get("finished", data.get("finished", False)),
+        "status": execution.get("status", data.get("status", "unknown")),
         "nodes_executed": len(nodes_executed),
         "nodes_list": nodes_executed,
         "errors": errors,

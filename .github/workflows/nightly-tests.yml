@@ -130,8 +130,8 @@ jobs:
     needs: [test-supabase-portal, test-n8n-workflow]
     if: |
       always() && (
-        needs.test-supabase-portal.result == 'failure' ||
-        needs.test-n8n-workflow.result    == 'failure'
+        needs.test-supabase-portal.outputs.failed != '0' ||
+        needs.test-n8n-workflow.outputs.failed    != '0'
       )
 
     steps:
@@ -209,8 +209,8 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
           RUN_URL:            ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          SP_STATUS:          ${{ needs.test-supabase-portal.result }}
-          N8N_STATUS:         ${{ needs.test-n8n-workflow.result }}
+          SP_STATUS:          ${{ needs.test-supabase-portal.outputs.failed != '0' && 'failure' || 'success' }}
+          N8N_STATUS:         ${{ needs.test-n8n-workflow.outputs.failed != '0' && 'failure' || 'success' }}
           SP_PASSED:          ${{ needs.test-supabase-portal.outputs.passed }}
           SP_FAILED:          ${{ needs.test-supabase-portal.outputs.failed }}
           N8N_PASSED:         ${{ needs.test-n8n-workflow.outputs.passed }}

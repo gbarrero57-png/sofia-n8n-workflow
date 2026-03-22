@@ -1,9 +1,5 @@
 {
   "name": "SofIA - SMS Follow-up",
-  "settings": {
-    "executionOrder": "v1"
-  },
-  "staticData": null,
   "nodes": [
     {
       "id": "sms-01",
@@ -117,7 +113,7 @@
       "onError": "continueRegularOutput",
       "parameters": {
         "method": "POST",
-        "url": "=https://api.twilio.com/2010-04-01/Accounts/ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/Messages.json",
+        "url": "https://api.twilio.com/2010-04-01/Accounts/AC4080780a4b4a7d8e7b107a39f01abad3/Messages.json",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpBasicAuth",
         "sendBody": true,
@@ -130,7 +126,7 @@
             },
             {
               "name": "From",
-              "value": "={{ $env.TWILIO_FROM || \"+1XXXXXXXXXX\" }}"
+              "value": "+13186683828"
             },
             {
               "name": "Body",
@@ -139,6 +135,12 @@
           ]
         },
         "options": {}
+      },
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "yh9g07Rj36ac5eE0",
+          "name": "Twilio API"
+        }
       }
     },
     {
@@ -214,7 +216,7 @@
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
-            "status": "sms_enviado",
+            "status": "sin_celular",
             "fecha_followup": "={{ $json.fecha_hoy }}"
           },
           "matchingColumns": [],
@@ -288,6 +290,16 @@
           }
         ]
       ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "staticData": {
+    "node:CRON 10am": {
+      "recurrenceRules": []
     }
   }
 }

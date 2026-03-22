@@ -1,9 +1,5 @@
 {
   "name": "SofIA - Llamada Follow-up",
-  "settings": {
-    "executionOrder": "v1"
-  },
-  "staticData": null,
   "nodes": [
     {
       "id": "call-01",
@@ -69,7 +65,7 @@
         400
       ],
       "parameters": {
-        "jsCode": "var all = $input.all();\nreturn all.map(function(item) {\n  var j = item.json;\n  var tel = (j.telefono||\"\").replace(/[\\s\\-\\(\\)]/g,\"\");\n  var phone = tel;\n  if (!phone.startsWith(\"+51\")) {\n    if (phone.startsWith(\"9\") && phone.length===9) phone = \"+51\"+phone;\n    else if (phone.startsWith(\"51\")) phone = \"+\"+phone;\n    else if (phone.startsWith(\"01\")) phone = \"+51\"+phone.slice(1);\n    else phone = \"+51\"+phone;\n  }\n  return { json: {\n    record_id:   j.id,\n    nombre:      j.nombre,\n    phone_e164:  phone,\n    twilio_sid:  \"ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\",\n    fecha_hoy:   new Date().toISOString().slice(0,10)\n  }};\n});"
+        "jsCode": "var all = $input.all();\nreturn all.map(function(item) {\n  var j = item.json;\n  var tel = (j.telefono||\"\").replace(/[\\s\\-\\(\\)]/g,\"\");\n  var phone = tel;\n  if (!phone.startsWith(\"+51\")) {\n    if (phone.startsWith(\"9\") && phone.length===9) phone = \"+51\"+phone;\n    else if (phone.startsWith(\"51\")) phone = \"+\"+phone;\n    else if (phone.startsWith(\"01\")) phone = \"+51\"+phone.slice(1);\n    else phone = \"+51\"+phone;\n  }\n  return { json: {\n    record_id:   j.id,\n    nombre:      j.nombre,\n    phone_e164:  phone,\n    twilio_sid:  \"AC4080780a4b4a7d8e7b107a39f01abad3\",\n    fecha_hoy:   new Date().toISOString().slice(0,10)\n  }};\n});"
       }
     },
     {
@@ -97,7 +93,7 @@
             },
             {
               "name": "From",
-              "value": "={{ $env.TWILIO_FROM || \"+1XXXXXXXXXX\" }}"
+              "value": "+13186683828"
             },
             {
               "name": "Twiml",
@@ -106,6 +102,12 @@
           ]
         },
         "options": {}
+      },
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "yh9g07Rj36ac5eE0",
+          "name": "Twilio API"
+        }
       }
     },
     {
@@ -194,6 +196,16 @@
           }
         ]
       ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "staticData": {
+    "node:CRON 11am": {
+      "recurrenceRules": []
     }
   }
 }

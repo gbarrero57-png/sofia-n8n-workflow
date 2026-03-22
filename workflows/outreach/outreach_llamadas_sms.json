@@ -1,0 +1,343 @@
+{
+  "name": "SofIA - Outreach Llamadas y SMS",
+  "nodes": [
+    {
+      "id": "out-01",
+      "name": "Inicio Manual",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        400
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "out-02",
+      "name": "Configuracion",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        400
+      ],
+      "parameters": {
+        "jsCode": "// ⚠️  EDITAR estos valores después de crear cuenta Twilio\nreturn [{ json: {\n  twilio_sid:  \"AC4080780a4b4a7d8e7b107a39f01abad3\",  // Account SID de twilio.com/console\n  twilio_from: \"+13186683828\",  // Tu número Twilio (+51XXXXXXXXX para Peru)\n  max_leads:   20,   // Máximo de leads a contactar por ejecución\n  modo_prueba: true  // true = NO envía llamadas/SMS reales (solo log)\n}}];"
+      }
+    },
+    {
+      "id": "out-03",
+      "name": "Get Leads",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [
+        440,
+        400
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "YmCX94YiEOb7UtNi",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "parameters": {
+        "operation": "list",
+        "base": {
+          "__rl": true,
+          "value": "app6a4u9dvXMxwOnY",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblBuVcKITk5GFoqk",
+          "mode": "id"
+        },
+        "returnAll": false,
+        "limit": "={{ $('Configuracion').item.json.max_leads }}",
+        "options": {
+          "filterByFormula": "AND(OR({status}='nuevo',{status}='sin_email',{status}='sin_web'),NOT({telefono}=''),NOT({status}='contactado_tel'),NOT({status}='follow_up_tel'))"
+        }
+      }
+    },
+    {
+      "id": "out-04",
+      "name": "Preparar Datos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        400
+      ],
+      "parameters": {
+        "jsCode": "var all = $input.all();\nvar config = $(\"Configuracion\").item.json;\n\nreturn all.map(function(item) {\n  var j = item.json;\n  var nombre = j.nombre || \"\";\n  var tel = (j.telefono || \"\").replace(/[\\s\\-\\(\\)]/g, \"\");\n\n  // Normalizar a E.164 (+51XXXXXXXXX)\n  var phone = tel;\n  if (phone.startsWith(\"+51\")) { /* ya está bien */ }\n  else if (phone.startsWith(\"51\") && phone.length >= 11) { phone = \"+\" + phone; }\n  else if (phone.startsWith(\"9\") && phone.length === 9) { phone = \"+51\" + phone; }\n  else if (phone.startsWith(\"01\") && phone.length >= 9) { phone = \"+51\" + phone.slice(1); }\n  else if (phone.length === 7) { phone = \"+511\" + phone; } // Lima landline\n  else { phone = \"+51\" + phone; }\n\n  // Es celular? (Perú: todos los celulares empiezan con 9)\n  var isMobile = /^\\+519/.test(phone);\n\n  // SMS personalizado (max 160 chars)\n  var smsText = \"Hola \" + nombre.slice(0,20) + \"! SofIA = IA para clinicas dentales: agenda WhatsApp 24/7, -40% cancelaciones. Demo GRATIS. Responde para info. STOP para cancelar.\";\n\n  return { json: {\n    record_id:   j.id,\n    nombre:      nombre,\n    telefono:    j.telefono,\n    phone_e164:  phone,\n    is_mobile:   isMobile,\n    sms_text:    smsText,\n    twilio_sid:  config.twilio_sid,\n    twilio_from: config.twilio_from,\n    modo_prueba: config.modo_prueba\n  }};\n});"
+      }
+    },
+    {
+      "id": "out-05",
+      "name": "Hacer Llamada",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        880,
+        400
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.twilio.com/2010-04-01/Accounts/{{ $json.twilio_sid }}/Calls.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "To",
+              "value": "={{ $json.phone_e164 }}"
+            },
+            {
+              "name": "From",
+              "value": "={{ $json.twilio_from }}"
+            },
+            {
+              "name": "Twiml",
+              "value": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response><Say voice=\"Polly.Mia-Neural\" language=\"es-US\">Hola, buenos dias. Le llamamos de parte de SofIA, el asistente de inteligencia artificial para clinicas dentales en Lima. Le enviamos un mensaje hace unos dias sobre como automatizar la agenda de citas por WhatsApp las 24 horas. Si le interesa una demostracion gratuita, por favor responda el mensaje de texto que le enviamos. Muchas gracias y que tenga un excelente dia.</Say></Response>"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "54eFThUpUnQMMxHD",
+          "name": "Twilio Basic Auth"
+        }
+      }
+    },
+    {
+      "id": "out-06",
+      "name": "IF Movil",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        400
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "mob1",
+              "leftValue": "={{ $json.is_mobile }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "out-07",
+      "name": "Enviar SMS",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        1320,
+        280
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "to": "={{ $json.phone_e164 }}",
+        "from": "={{ $json.twilio_from }}",
+        "message": "={{ $json.sms_text }}"
+      },
+      "credentials": {
+        "twilioApi": {
+          "id": "QIsqVRYzfNxGw6OO",
+          "name": "Twilio API"
+        }
+      }
+    },
+    {
+      "id": "out-08",
+      "name": "Actualizar Lead Llamada",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        560
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "YmCX94YiEOb7UtNi",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "app6a4u9dvXMxwOnY",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblBuVcKITk5GFoqk",
+          "mode": "id"
+        },
+        "id": "={{ $json.record_id }}",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "status": "contactado_tel"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "out-09",
+      "name": "Actualizar Lead Solo Llamada",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        560
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "YmCX94YiEOb7UtNi",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "app6a4u9dvXMxwOnY",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblBuVcKITk5GFoqk",
+          "mode": "id"
+        },
+        "id": "={{ $json.record_id }}",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "status": "contactado_tel"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Inicio Manual": {
+      "main": [
+        [
+          {
+            "node": "Configuracion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Configuracion": {
+      "main": [
+        [
+          {
+            "node": "Get Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Leads": {
+      "main": [
+        [
+          {
+            "node": "Preparar Datos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Datos": {
+      "main": [
+        [
+          {
+            "node": "Hacer Llamada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hacer Llamada": {
+      "main": [
+        [
+          {
+            "node": "IF Movil",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Movil": {
+      "main": [
+        [
+          {
+            "node": "Enviar SMS",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Actualizar Lead Solo Llamada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar SMS": {
+      "main": [
+        [
+          {
+            "node": "Actualizar Lead Llamada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "staticData": null
+}

@@ -1,0 +1,326 @@
+{
+  "name": "Libreria - W2: Confirmacion",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "libreria/confirmar",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "wh-confirmar",
+      "name": "Webhook Confirmacion",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "libreria-confirmar"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || $input.first().json;\nreturn [{\n  json: {\n    cotizacion_id:  (body.cotizacion_id  || '').trim(),\n    opcion_elegida: (body.opcion_elegida || '').trim().toLowerCase(),\n    metodo_pago:    (body.metodo_pago    || '').trim(),\n    modalidad:      (body.modalidad      || '').trim().toLowerCase(),\n    direccion:      (body.direccion      || '').trim()\n  }\n}];"
+      },
+      "id": "code-normalizar",
+      "name": "Normalizar Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $input.first().json;\nif (!d.cotizacion_id)\n  return [{ json: { ...d, valido: false, error_code: 400, error_msg: 'cotizacion_id es requerido' } }];\nif (!['marca', 'economico'].includes(d.opcion_elegida))\n  return [{ json: { ...d, valido: false, error_code: 422, error_msg: 'opcion_elegida debe ser marca o economico. Recibido: ' + d.opcion_elegida } }];\nif (!d.metodo_pago)\n  return [{ json: { ...d, valido: false, error_code: 422, error_msg: 'metodo_pago es requerido' } }];\nif (!['retiro', 'envio'].includes(d.modalidad))\n  return [{ json: { ...d, valido: false, error_code: 422, error_msg: 'modalidad debe ser retiro o envio. Recibido: ' + d.modalidad } }];\nif (d.modalidad === 'envio' && !d.direccion)\n  return [{ json: { ...d, valido: false, error_code: 422, error_msg: 'direccion es requerida cuando modalidad es envio' } }];\nreturn [{ json: { ...d, valido: true } }];"
+      },
+      "id": "code-validar-campos",
+      "name": "Validar Campos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [{
+            "id": "cond-campos",
+            "leftValue": "={{ $json.valido }}",
+            "rightValue": true,
+            "operator": { "type": "boolean", "operation": "equals" }
+          }],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-campos",
+      "name": "¿Campos Válidos?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": { "__rl": true, "value": "={{ $env.LIBRERIA_SPREADSHEET_ID }}", "mode": "id" },
+        "sheetName":  { "__rl": true, "value": "cotizaciones", "mode": "name" },
+        "filtersUI": {},
+        "options": {}
+      },
+      "id": "gsheets-buscar",
+      "name": "Buscar Cotizacion",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [1120, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": { "id": "CONFIGURAR-GOOGLE-SHEETS", "name": "Google Sheets - Libreria" }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const inputData = $('Normalizar Input').first().json;\nconst cotizacion_id = inputData.cotizacion_id;\nconst fila = $input.all().find(item => item.json.cotizacion_id === cotizacion_id)?.json;\n\nif (!fila)\n  return [{ json: { ...inputData, cotizacion_ok: false, error_code: 404, error_msg: 'Cotizacion no encontrada: ' + cotizacion_id } }];\n\nif (fila.estado !== 'cotizado') {\n  let msg;\n  if (['elegido_marca', 'elegido_economico'].includes(fila.estado))\n    msg = 'Ya confirmada con opcion: ' + fila.estado.replace('elegido_', '');\n  else if (fila.estado === 'comprobante_enviado')\n    msg = 'Ya tiene comprobante enviado.';\n  else\n    msg = 'Estado invalido: ' + fila.estado + '. Se requiere: cotizado';\n  return [{ json: { ...inputData, cotizacion_ok: false, error_code: 409, error_msg: msg, estado_actual: fila.estado } }];\n}\n\nreturn [{\n  json: {\n    ...inputData,\n    cotizacion_ok: true,\n    cotizacion: {\n      nombre:          fila.nombre          || '',\n      telefono:        fila.telefono        || '',\n      colegio:         fila.colegio         || '',\n      grado:           fila.grado           || '',\n      total_marca:     parseFloat(fila.total_marca)     || 0,\n      total_economico: parseFloat(fila.total_economico) || 0,\n      fecha_original:  fila.fecha\n    }\n  }\n}];"
+      },
+      "id": "code-validar-cotizacion",
+      "name": "Validar Cotizacion + Estado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [{
+            "id": "cond-cotizacion",
+            "leftValue": "={{ $json.cotizacion_ok }}",
+            "rightValue": true,
+            "operator": { "type": "boolean", "operation": "equals" }
+          }],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-cotizacion",
+      "name": "¿Cotizacion Confirmable?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1560, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $input.first().json;\nconst cot = d.cotizacion;\nconst total = d.opcion_elegida === 'marca' ? cot.total_marca : cot.total_economico;\nif (total <= 0) throw new Error('Total invalido para opcion ' + d.opcion_elegida + ': ' + total);\nreturn [{\n  json: {\n    cotizacion_id:      d.cotizacion_id,\n    nombre:             cot.nombre,\n    telefono:           d.telefono || cot.telefono,\n    colegio:            cot.colegio,\n    grado:              cot.grado,\n    opcion:             d.opcion_elegida,\n    total:              Math.round(total * 100) / 100,\n    metodo_pago:        d.metodo_pago,\n    modalidad:          d.modalidad,\n    direccion:          d.direccion || '',\n    estado:             'pendiente_pago',\n    fecha_pedido:       new Date().toISOString(),\n    nuevo_estado:       d.opcion_elegida === 'marca' ? 'elegido_marca' : 'elegido_economico',\n    datos_pago:         $env.DATOS_PAGO         || 'Sin configurar',\n    direccion_libreria: $env.DIRECCION_LIBRERIA  || 'Sin configurar'\n  }\n}];"
+      },
+      "id": "code-calcular",
+      "name": "Calcular Total + Preparar Datos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1780, 160]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": { "__rl": true, "value": "={{ $env.LIBRERIA_SPREADSHEET_ID }}", "mode": "id" },
+        "sheetName":  { "__rl": true, "value": "cotizaciones", "mode": "name" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "cotizacion_id": "={{ $json.cotizacion_id }}",
+            "estado":        "={{ $json.nuevo_estado }}"
+          },
+          "matchingColumns": ["cotizacion_id"]
+        },
+        "options": {}
+      },
+      "id": "gsheets-actualizar",
+      "name": "Actualizar Estado Cotizacion",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [2000, 160],
+      "continueOnFail": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googleSheetsOAuth2Api": { "id": "CONFIGURAR-GOOGLE-SHEETS", "name": "Google Sheets - Libreria" }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [{
+            "id": "cond-update",
+            "leftValue": "={{ $json.error === undefined }}",
+            "rightValue": true,
+            "operator": { "type": "boolean", "operation": "equals" }
+          }],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-update",
+      "name": "¿Update OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2220, 160]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": { "__rl": true, "value": "={{ $env.LIBRERIA_SPREADSHEET_ID }}", "mode": "id" },
+        "sheetName":  { "__rl": true, "value": "pedidos", "mode": "name" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "cotizacion_id": "={{ $('Calcular Total + Preparar Datos').first().json.cotizacion_id }}",
+            "telefono":      "={{ $('Calcular Total + Preparar Datos').first().json.telefono }}",
+            "opcion":        "={{ $('Calcular Total + Preparar Datos').first().json.opcion }}",
+            "total":         "={{ $('Calcular Total + Preparar Datos').first().json.total }}",
+            "metodo_pago":   "={{ $('Calcular Total + Preparar Datos').first().json.metodo_pago }}",
+            "modalidad":     "={{ $('Calcular Total + Preparar Datos').first().json.modalidad }}",
+            "direccion":     "={{ $('Calcular Total + Preparar Datos').first().json.direccion }}",
+            "estado":        "pendiente_pago",
+            "fecha":         "={{ $('Calcular Total + Preparar Datos').first().json.fecha_pedido }}"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "gsheets-pedido",
+      "name": "Guardar Pedido",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [2440, 160],
+      "credentials": {
+        "googleSheetsOAuth2Api": { "id": "CONFIGURAR-GOOGLE-SHEETS", "name": "Google Sheets - Libreria" }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $('Calcular Total + Preparar Datos').first().json;\nconst linea_dir = d.modalidad === 'envio' ? '\\n📍 ' + d.direccion : '';\nconst emoji_mod = d.modalidad === 'envio' ? '🚚' : '🏪';\nconst msg_admin = [\n  '📦 *Pedido Confirmado*',\n  '━━━━━━━━━━━━━━━━━━━',\n  '🆔 `' + d.cotizacion_id + '`',\n  '📅 ' + new Date(d.fecha_pedido).toLocaleString('es-PE', { timeZone: 'America/Lima' }),\n  '━━━━━━━━━━━━━━━━━━━',\n  '👤 ' + d.nombre,\n  '📞 ' + d.telefono,\n  '🏫 ' + (d.colegio || 'N/A') + ' — ' + (d.grado || 'N/A'),\n  '━━━━━━━━━━━━━━━━━━━',\n  '✅ Opción: *' + d.opcion.toUpperCase() + '*',\n  '💰 Total: *S/ ' + d.total.toFixed(2) + '*',\n  '💳 Pago: ' + d.metodo_pago,\n  emoji_mod + ' Modalidad: ' + (d.modalidad === 'envio' ? 'Envío' : 'Retiro') + linea_dir,\n  '━━━━━━━━━━━━━━━━━━━',\n  '⏳ Estado: *PENDIENTE DE PAGO*'\n].join('\\n');\nconst webhook_response = {\n  exito: true,\n  mensaje: 'Pedido confirmado. Realiza el pago con los datos indicados.',\n  cotizacion_id: d.cotizacion_id,\n  opcion: d.opcion,\n  total: d.total,\n  estado: 'pendiente_pago',\n  datos_pago: d.datos_pago,\n  direccion_libreria: d.modalidad === 'retiro' ? d.direccion_libreria : null\n};\nreturn [{ json: { msg_admin, webhook_response } }];"
+      },
+      "id": "code-mensaje",
+      "name": "Preparar Mensaje + Respuesta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2660, 160]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $env.TELEGRAM_CHAT_ADMIN }}",
+        "text": "={{ $json.msg_admin }}",
+        "additionalFields": { "parse_mode": "Markdown" }
+      },
+      "id": "tg-admin",
+      "name": "Telegram ADMIN",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [2880, 160],
+      "continueOnFail": true,
+      "credentials": {
+        "telegramApi": { "id": "CONFIGURAR-TELEGRAM", "name": "Telegram Bot - Libreria" }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($('Preparar Mensaje + Respuesta').first().json.webhook_response) }}",
+        "options": { "responseCode": 200 }
+      },
+      "id": "respond-ok",
+      "name": "Respuesta Exitosa",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [3100, 160]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ error: true, codigo: $json.error_code, mensaje: $json.error_msg }) }}",
+        "options": { "responseCode": "={{ $json.error_code }}" }
+      },
+      "id": "respond-error-input",
+      "name": "Error Input",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [900, 480]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ error: true, codigo: $json.error_code, mensaje: $json.error_msg, estado_actual: $json.estado_actual || null }) }}",
+        "options": { "responseCode": "={{ $json.error_code }}" }
+      },
+      "id": "respond-error-negocio",
+      "name": "Error Negocio",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1560, 480]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ error: true, codigo: 500, mensaje: 'Error interno al actualizar el estado. Intenta nuevamente.', detalle: ($json.error && $json.error.message) || 'Error desconocido' }) }}",
+        "options": { "responseCode": 500 }
+      },
+      "id": "respond-error-interno",
+      "name": "Error Interno",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2220, 480]
+    }
+  ],
+  "connections": {
+    "Webhook Confirmacion": {
+      "main": [[{ "node": "Normalizar Input", "type": "main", "index": 0 }]]
+    },
+    "Normalizar Input": {
+      "main": [[{ "node": "Validar Campos", "type": "main", "index": 0 }]]
+    },
+    "Validar Campos": {
+      "main": [[{ "node": "¿Campos Válidos?", "type": "main", "index": 0 }]]
+    },
+    "¿Campos Válidos?": {
+      "main": [
+        [{ "node": "Buscar Cotizacion",  "type": "main", "index": 0 }],
+        [{ "node": "Error Input",         "type": "main", "index": 0 }]
+      ]
+    },
+    "Buscar Cotizacion": {
+      "main": [[{ "node": "Validar Cotizacion + Estado", "type": "main", "index": 0 }]]
+    },
+    "Validar Cotizacion + Estado": {
+      "main": [[{ "node": "¿Cotizacion Confirmable?", "type": "main", "index": 0 }]]
+    },
+    "¿Cotizacion Confirmable?": {
+      "main": [
+        [{ "node": "Calcular Total + Preparar Datos", "type": "main", "index": 0 }],
+        [{ "node": "Error Negocio",                   "type": "main", "index": 0 }]
+      ]
+    },
+    "Calcular Total + Preparar Datos": {
+      "main": [[{ "node": "Actualizar Estado Cotizacion", "type": "main", "index": 0 }]]
+    },
+    "Actualizar Estado Cotizacion": {
+      "main": [[{ "node": "¿Update OK?", "type": "main", "index": 0 }]]
+    },
+    "¿Update OK?": {
+      "main": [
+        [{ "node": "Guardar Pedido",  "type": "main", "index": 0 }],
+        [{ "node": "Error Interno",   "type": "main", "index": 0 }]
+      ]
+    },
+    "Guardar Pedido": {
+      "main": [[{ "node": "Preparar Mensaje + Respuesta", "type": "main", "index": 0 }]]
+    },
+    "Preparar Mensaje + Respuesta": {
+      "main": [[{ "node": "Telegram ADMIN", "type": "main", "index": 0 }]]
+    },
+    "Telegram ADMIN": {
+      "main": [[{ "node": "Respuesta Exitosa", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "id": "libreria-w2-confirmacion",
+  "tags": [{ "name": "libreria" }, { "name": "confirmacion" }]
+}

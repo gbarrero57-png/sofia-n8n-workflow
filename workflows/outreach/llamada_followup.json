@@ -1,0 +1,199 @@
+{
+  "name": "SofIA - Llamada Follow-up",
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "nodes": [
+    {
+      "id": "call-01",
+      "name": "CRON 11am",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        400
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 16 * * 1-5"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "call-02",
+      "name": "Get Leads Llamada",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [
+        220,
+        400
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "YmCX94YiEOb7UtNi",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "parameters": {
+        "operation": "list",
+        "base": {
+          "__rl": true,
+          "value": "app6a4u9dvXMxwOnY",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblBuVcKITk5GFoqk",
+          "mode": "id"
+        },
+        "returnAll": false,
+        "limit": 5,
+        "options": {
+          "filterByFormula": "AND({status}='sms_enviado',IS_BEFORE({fecha_followup},DATEADD(TODAY(),-3,'days')))"
+        }
+      }
+    },
+    {
+      "id": "call-03",
+      "name": "Preparar Llamada",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        400
+      ],
+      "parameters": {
+        "jsCode": "var all = $input.all();\nreturn all.map(function(item) {\n  var j = item.json;\n  var tel = (j.telefono||\"\").replace(/[\\s\\-\\(\\)]/g,\"\");\n  var phone = tel;\n  if (!phone.startsWith(\"+51\")) {\n    if (phone.startsWith(\"9\") && phone.length===9) phone = \"+51\"+phone;\n    else if (phone.startsWith(\"51\")) phone = \"+\"+phone;\n    else if (phone.startsWith(\"01\")) phone = \"+51\"+phone.slice(1);\n    else phone = \"+51\"+phone;\n  }\n  return { json: {\n    record_id:   j.id,\n    nombre:      j.nombre,\n    phone_e164:  phone,\n    twilio_sid:  \"ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\",\n    fecha_hoy:   new Date().toISOString().slice(0,10)\n  }};\n});"
+      }
+    },
+    {
+      "id": "call-04",
+      "name": "Hacer Llamada",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        660,
+        400
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ \"https://api.twilio.com/2010-04-01/Accounts/\" + $json.twilio_sid + \"/Calls.json\" }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "To",
+              "value": "={{ $json.phone_e164 }}"
+            },
+            {
+              "name": "From",
+              "value": "={{ $env.TWILIO_FROM || \"+1XXXXXXXXXX\" }}"
+            },
+            {
+              "name": "Twiml",
+              "value": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response><Say voice=\"Polly.Mia-Neural\">Hola, buenos dias. Llamamos de parte de SofIA, el asistente inteligente para clinicas dentales en Lima. Le escribimos hace unos dias sobre como automatizar la agenda de citas por WhatsApp. Si le interesa una demostracion gratuita, por favor responda el mensaje de texto que le enviamos. Muchas gracias y hasta luego.</Say></Response>"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "call-05",
+      "name": "Actualizar Llamada",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [
+        880,
+        400
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "YmCX94YiEOb7UtNi",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "app6a4u9dvXMxwOnY",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblBuVcKITk5GFoqk",
+          "mode": "id"
+        },
+        "id": "={{ $json.record_id }}",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "status": "contactado_tel"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {
+          "typecast": true
+        }
+      }
+    }
+  ],
+  "connections": {
+    "CRON 11am": {
+      "main": [
+        [
+          {
+            "node": "Get Leads Llamada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Leads Llamada": {
+      "main": [
+        [
+          {
+            "node": "Preparar Llamada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Llamada": {
+      "main": [
+        [
+          {
+            "node": "Hacer Llamada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hacer Llamada": {
+      "main": [
+        [
+          {
+            "node": "Actualizar Llamada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

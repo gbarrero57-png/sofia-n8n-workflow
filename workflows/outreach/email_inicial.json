@@ -1,0 +1,230 @@
+{
+  "name": "SofIA - Email Inicial",
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "nodes": [
+    {
+      "id": "em-01",
+      "name": "CRON 9am",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        400
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 14 * * 1-5"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "em-02",
+      "name": "Get Leads Email",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [
+        220,
+        400
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "YmCX94YiEOb7UtNi",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "parameters": {
+        "operation": "list",
+        "base": {
+          "__rl": true,
+          "value": "app6a4u9dvXMxwOnY",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblBuVcKITk5GFoqk",
+          "mode": "id"
+        },
+        "returnAll": false,
+        "limit": 10,
+        "options": {
+          "filterByFormula": "AND(OR({status}='nuevo',{status}='sin_web'),NOT({email}=''))"
+        }
+      }
+    },
+    {
+      "id": "em-03",
+      "name": "Generar Email OpenAI",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1,
+      "position": [
+        440,
+        400
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "SeCPLJI4mV6p2hJR",
+          "name": "OpenAi account"
+        }
+      },
+      "parameters": {
+        "resource": "text",
+        "operation": "message",
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list"
+        },
+        "messages": {
+          "values": [
+            {
+              "role": "user",
+              "content": "=Eres un experto en ventas B2B para clínicas dentales. Escribe un email corto, natural y personalizado para la clínica \"{{ $json.nombre }}\" ubicada en Lima, Perú.\n\nDatos de la clínica:\n- Nombre: {{ $json.nombre }}\n- Dirección: {{ $json.direccion }}\n- Rating Google: {{ $json.rating }} estrellas ({{ $json.total_resenas }} reseñas)\n- Website: {{ $json.website || 'no tiene' }}\n\nProducto a presentar: SofIA - asistente IA para clínicas dentales que:\n• Automatiza la agenda de citas por WhatsApp (24/7)\n• Reduce cancelaciones con recordatorios automáticos\n• Capta pacientes que escriben fuera de horario\n• Fácil de configurar, sin cambiar el sistema actual\n\nInstrucciones:\n- Email MUY corto (máx 5 oraciones en el cuerpo)\n- Tono profesional pero cercano, NO corporativo\n- Menciona algo específico de la clínica (rating, zona, etc.)\n- CTA claro: \"¿Le gustaría ver una demo de 15 minutos esta semana?\"\n- NO usar emojis excesivos\n- Firma: \"Gabriel\\nEquipo SofIA\\nweb: sofia.redsolucionesti.com\"\n\nResponde ÚNICAMENTE en este formato JSON (sin markdown):\n{\"asunto\":\"...\",\"cuerpo\":\"...\"}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "em-04",
+      "name": "Parsear Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        400
+      ],
+      "parameters": {
+        "jsCode": "var all = $input.all();\nreturn all.map(function(item) {\n  var openai = item.json;\n  // Extraer el texto de la respuesta de OpenAI\n  var text = openai.message?.content || openai.text || JSON.stringify(openai);\n  var parsed = {};\n  try {\n    // Limpiar markdown si lo hay\n    var clean = text.replace(/```json\\n?/g,\"\").replace(/```/g,\"\").trim();\n    parsed = JSON.parse(clean);\n  } catch(e) {\n    parsed = { asunto: \"SofIA para \" + (item.json.nombre||\"su clinica\"), cuerpo: text };\n  }\n  // Recuperar datos del lead desde nodo anterior\n  var lead = $(\"Get Leads Email\").all().find(function(i){\n    return i.json.email === item.json.email || i.json.nombre === item.json.nombre;\n  });\n  var leadData = lead ? lead.json : {};\n  return { json: {\n    record_id:    leadData.id || \"\",\n    nombre:       leadData.nombre || \"\",\n    email:        leadData.email || \"\",\n    email_asunto: parsed.asunto || \"\",\n    email_cuerpo: parsed.cuerpo || \"\",\n    fecha_hoy:    new Date().toISOString().slice(0,10)\n  }};\n});"
+      }
+    },
+    {
+      "id": "em-05",
+      "name": "Enviar Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        880,
+        400
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "fromEmail": "\"SofIA for Clinics\" <gabriel@redsolucionesti.com>",
+        "toEmail": "={{ $json.email }}",
+        "subject": "={{ $json.email_asunto }}",
+        "emailType": "text",
+        "message": "={{ $json.email_cuerpo }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "em-06",
+      "name": "Actualizar Email Enviado",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        400
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "YmCX94YiEOb7UtNi",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "app6a4u9dvXMxwOnY",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblBuVcKITk5GFoqk",
+          "mode": "id"
+        },
+        "id": "={{ $json.record_id }}",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "status": "email_enviado",
+            "fecha_envio": "={{ $json.fecha_hoy }}",
+            "email_asunto": "={{ $json.email_asunto }}",
+            "email_cuerpo": "={{ $json.email_cuerpo }}"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {
+          "typecast": true
+        }
+      }
+    }
+  ],
+  "connections": {
+    "CRON 9am": {
+      "main": [
+        [
+          {
+            "node": "Get Leads Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Leads Email": {
+      "main": [
+        [
+          {
+            "node": "Generar Email OpenAI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generar Email OpenAI": {
+      "main": [
+        [
+          {
+            "node": "Parsear Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parsear Email": {
+      "main": [
+        [
+          {
+            "node": "Enviar Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar Email": {
+      "main": [
+        [
+          {
+            "node": "Actualizar Email Enviado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

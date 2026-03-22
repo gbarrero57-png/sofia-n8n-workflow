@@ -1,0 +1,284 @@
+{
+  "name": "Libreria - W3: Comprobante",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "libreria/comprobante",
+        "responseMode": "responseNode",
+        "options": {
+          "binaryData": true
+        }
+      },
+      "id": "wh-comprobante",
+      "name": "Webhook Comprobante",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "libreria-comprobante"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================\n// EXTRAER + CODIFICAR ARCHIVO\n// Valida campos y convierte binario a base64\n// (el binario se perdería al pasar por GSheets)\n// ============================================\nconst item = $input.first();\nconst body = item.json.body || item.json;\nconst cotizacion_id = (body.cotizacion_id || '').trim();\nconst telefono      = (body.telefono      || '').trim();\n\n// Validar cotizacion_id\nif (!cotizacion_id) {\n  return [{\n    json: {\n      valido:    false,\n      error_code: 400,\n      error_msg: 'cotizacion_id es requerido'\n    }\n  }];\n}\n\n// Validar que llegó un archivo\nconst binaryKeys = Object.keys(item.binary || {});\nif (binaryKeys.length === 0) {\n  return [{\n    json: {\n      valido:     false,\n      error_code: 400,\n      error_msg:  'Archivo de comprobante requerido',\n      cotizacion_id\n    }\n  }];\n}\n\n// Codificar a base64 para sobrevivir el paso por Google Sheets\nconst binaryKey    = binaryKeys[0];\nconst binaryBuffer = await this.helpers.getBinaryDataBuffer(0, binaryKey);\nconst fileBase64   = binaryBuffer.toString('base64');\nconst fileMime     = item.binary[binaryKey].mimeType || 'image/jpeg';\nconst fileName     = item.binary[binaryKey].fileName || 'comprobante.jpg';\n\nreturn [{\n  json: {\n    valido: true,\n    cotizacion_id,\n    telefono,\n    fileBase64,\n    fileMime,\n    fileName\n  }\n}];"
+      },
+      "id": "code-extraer",
+      "name": "Extraer + Codificar Archivo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-input-valido",
+              "leftValue": "={{ $json.valido }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-input-valido",
+      "name": "¿Input Válido?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.LIBRERIA_SPREADSHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "cotizaciones",
+          "mode": "name"
+        },
+        "filtersUI": {},
+        "options": {}
+      },
+      "id": "gsheets-buscar",
+      "name": "Buscar Cotizacion",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [900, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "CONFIGURAR-GOOGLE-SHEETS",
+          "name": "Google Sheets - Libreria"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================\n// VALIDAR COTIZACION + ESTADO\n// Verifica existencia y que el estado permita\n// enviar un comprobante de pago\n// ============================================\nconst inputData     = $('Extraer + Codificar Archivo').first().json;\nconst cotizacion_id = inputData.cotizacion_id;\n\nconst todasLasCotizaciones = $input.all();\nconst fila = todasLasCotizaciones\n  .find(item => item.json.cotizacion_id === cotizacion_id)\n  ?.json;\n\n// Validar existencia\nif (!fila) {\n  return [{\n    json: {\n      ...inputData,\n      cotizacion_ok: false,\n      error_code:    404,\n      error_msg:     'Cotización no encontrada: ' + cotizacion_id\n    }\n  }];\n}\n\n// Solo se puede enviar comprobante después de elegir opción\nconst estadosPermitidos = ['elegido_marca', 'elegido_economico'];\n\nif (!estadosPermitidos.includes(fila.estado)) {\n  let error_code = 422;\n  let error_msg;\n\n  if (fila.estado === 'comprobante_enviado') {\n    error_code = 409;\n    error_msg  = 'Ya existe un comprobante enviado para esta cotización.';\n  } else if (fila.estado === 'verificado') {\n    error_code = 409;\n    error_msg  = 'Esta cotización ya fue verificada y procesada.';\n  } else if (fila.estado === 'cotizado') {\n    error_msg  = 'Debes confirmar tu opción (marca o económica) antes de enviar el comprobante.';\n  } else {\n    error_msg  = 'Estado incompatible para envío de comprobante: \"' + fila.estado + '\"';\n  }\n\n  return [{\n    json: {\n      ...inputData,\n      cotizacion_ok: false,\n      error_code,\n      error_msg,\n      estado_actual: fila.estado\n    }\n  }];\n}\n\n// Cotización válida para recibir comprobante\nreturn [{\n  json: {\n    ...inputData,\n    cotizacion_ok:   true,\n    nombre:          fila.nombre || '',\n    opcion:          fila.estado.replace('elegido_', ''),\n    estado_anterior: fila.estado\n  }\n}];"
+      },
+      "id": "code-validar",
+      "name": "Validar Cotizacion",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-cotizacion-ok",
+              "leftValue": "={{ $json.cotizacion_ok }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-cotizacion-ok",
+      "name": "¿Cotizacion Válida?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================\n// RESTAURAR BINARIO PARA TELEGRAM\n// El nodo Google Sheets no pasa datos binarios.\n// Reconstruimos desde el base64 guardado en JSON\n// para que el nodo Telegram pueda enviarlo.\n// ============================================\nconst d = $input.first().json;\n\nconst buffer     = Buffer.from(d.fileBase64, 'base64');\nconst binaryData = await this.helpers.prepareBinaryData(\n  buffer,\n  d.fileName,\n  d.fileMime\n);\n\nreturn [{\n  json: d,\n  binary: { comprobante: binaryData }\n}];"
+      },
+      "id": "code-restaurar",
+      "name": "Restaurar Binario para Telegram",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 160]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendDocument",
+        "chatId": "={{ $env.TELEGRAM_CHAT_REVISION }}",
+        "binaryData": true,
+        "binaryPropertyName": "comprobante",
+        "additionalFields": {
+          "caption": "={{ '📎 *Nuevo Comprobante*\\n━━━━━━━━━━━━━━━\\n🆔 ' + $json.cotizacion_id + '\\n📞 ' + ($json.telefono || 'N/A') + '\\n👤 ' + ($json.nombre || 'N/A') + '\\n✅ Opción: ' + ($json.opcion || '?').toUpperCase() + '\\n━━━━━━━━━━━━━━━\\n⏳ Pendiente de verificación' }}",
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "tg-revision",
+      "name": "Telegram REVISION",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1780, 160],
+      "continueOnFail": true,
+      "credentials": {
+        "telegramApi": {
+          "id": "CONFIGURAR-TELEGRAM",
+          "name": "Telegram Bot - Libreria"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.LIBRERIA_SPREADSHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "cotizaciones",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "cotizacion_id": "={{ $('Restaurar Binario para Telegram').first().json.cotizacion_id }}",
+            "estado":        "comprobante_enviado"
+          },
+          "matchingColumns": ["cotizacion_id"]
+        },
+        "options": {}
+      },
+      "id": "gsheets-actualizar",
+      "name": "Actualizar Estado",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [2000, 160],
+      "continueOnFail": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "CONFIGURAR-GOOGLE-SHEETS",
+          "name": "Google Sheets - Libreria"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ exito: true, mensaje: 'Tu pago está siendo verificado. Te contactaremos pronto.', cotizacion_id: $('Restaurar Binario para Telegram').first().json.cotizacion_id }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "respond-ok",
+      "name": "Respuesta Exitosa",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2220, 160]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ error: true, codigo: $json.error_code, mensaje: $json.error_msg }) }}",
+        "options": {
+          "responseCode": "={{ $json.error_code }}"
+        }
+      },
+      "id": "respond-error-input",
+      "name": "Error Input",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [900, 480]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ error: true, codigo: $json.error_code, mensaje: $json.error_msg, estado_actual: $json.estado_actual || null }) }}",
+        "options": {
+          "responseCode": "={{ $json.error_code }}"
+        }
+      },
+      "id": "respond-error-negocio",
+      "name": "Error Negocio",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1560, 480]
+    }
+  ],
+  "connections": {
+    "Webhook Comprobante": {
+      "main": [[{ "node": "Extraer + Codificar Archivo", "type": "main", "index": 0 }]]
+    },
+    "Extraer + Codificar Archivo": {
+      "main": [[{ "node": "¿Input Válido?", "type": "main", "index": 0 }]]
+    },
+    "¿Input Válido?": {
+      "main": [
+        [{ "node": "Buscar Cotizacion",  "type": "main", "index": 0 }],
+        [{ "node": "Error Input",         "type": "main", "index": 0 }]
+      ]
+    },
+    "Buscar Cotizacion": {
+      "main": [[{ "node": "Validar Cotizacion", "type": "main", "index": 0 }]]
+    },
+    "Validar Cotizacion": {
+      "main": [[{ "node": "¿Cotizacion Válida?", "type": "main", "index": 0 }]]
+    },
+    "¿Cotizacion Válida?": {
+      "main": [
+        [{ "node": "Restaurar Binario para Telegram", "type": "main", "index": 0 }],
+        [{ "node": "Error Negocio",                   "type": "main", "index": 0 }]
+      ]
+    },
+    "Restaurar Binario para Telegram": {
+      "main": [[{ "node": "Telegram REVISION", "type": "main", "index": 0 }]]
+    },
+    "Telegram REVISION": {
+      "main": [[{ "node": "Actualizar Estado", "type": "main", "index": 0 }]]
+    },
+    "Actualizar Estado": {
+      "main": [[{ "node": "Respuesta Exitosa", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "id": "libreria-w3-comprobante",
+  "tags": [
+    { "name": "libreria" },
+    { "name": "comprobante" }
+  ]
+}

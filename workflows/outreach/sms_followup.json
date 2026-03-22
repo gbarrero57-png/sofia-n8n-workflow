@@ -1,0 +1,293 @@
+{
+  "name": "SofIA - SMS Follow-up",
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "nodes": [
+    {
+      "id": "sms-01",
+      "name": "CRON 10am",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        400
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 15 * * 1-5"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "sms-02",
+      "name": "Get Leads SMS",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [
+        220,
+        400
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "YmCX94YiEOb7UtNi",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "parameters": {
+        "operation": "list",
+        "base": {
+          "__rl": true,
+          "value": "app6a4u9dvXMxwOnY",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblBuVcKITk5GFoqk",
+          "mode": "id"
+        },
+        "returnAll": false,
+        "limit": 5,
+        "options": {
+          "filterByFormula": "OR(AND({status}='email_enviado',IS_BEFORE({fecha_envio},DATEADD(TODAY(),-4,'days'))),{status}='sin_email')"
+        }
+      }
+    },
+    {
+      "id": "sms-03",
+      "name": "Preparar Tel",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        400
+      ],
+      "parameters": {
+        "jsCode": "var all = $input.all();\nreturn all.map(function(item) {\n  var j = item.json;\n  var tel = (j.telefono||\"\").replace(/[\\s\\-\\(\\)]/g,\"\");\n  if (!tel) return { json: Object.assign({}, j, { skip: true }) };\n  var phone = tel;\n  if (!phone.startsWith(\"+51\")) {\n    if (phone.startsWith(\"51\")) phone = \"+\" + phone;\n    else if (phone.startsWith(\"9\") && phone.length===9) phone = \"+51\" + phone;\n    else if (phone.startsWith(\"01\")) phone = \"+51\" + phone.slice(1);\n    else phone = \"+51\" + phone;\n  }\n  var isMobile = /^\\+519/.test(phone);\n  var sms = \"Hola! Soy SofIA, IA para clinicas dentales en Lima. Automatiza citas por WhatsApp 24/7 y reduce cancelaciones. Demo gratis disponible. Responde para info. STOP para no recibir mas.\";\n  return { json: {\n    record_id:  j.id,\n    nombre:     j.nombre,\n    phone_e164: phone,\n    is_mobile:  isMobile,\n    sms_text:   sms,\n    skip:       !isMobile,\n    fecha_hoy:  new Date().toISOString().slice(0,10)\n  }};\n});"
+      }
+    },
+    {
+      "id": "sms-04",
+      "name": "IF Es Celular",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        660,
+        400
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.is_mobile }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "sms-05",
+      "name": "Enviar SMS Twilio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        880,
+        280
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.twilio.com/2010-04-01/Accounts/ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/Messages.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "To",
+              "value": "={{ $json.phone_e164 }}"
+            },
+            {
+              "name": "From",
+              "value": "={{ $env.TWILIO_FROM || \"+1XXXXXXXXXX\" }}"
+            },
+            {
+              "name": "Body",
+              "value": "={{ $json.sms_text }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "sms-06",
+      "name": "Actualizar SMS Enviado",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        280
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "YmCX94YiEOb7UtNi",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "app6a4u9dvXMxwOnY",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblBuVcKITk5GFoqk",
+          "mode": "id"
+        },
+        "id": "={{ $json.record_id }}",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "status": "sms_enviado",
+            "fecha_followup": "={{ $json.fecha_hoy }}"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {
+          "typecast": true
+        }
+      }
+    },
+    {
+      "id": "sms-07",
+      "name": "Actualizar Sin Celular",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [
+        880,
+        560
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "YmCX94YiEOb7UtNi",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "app6a4u9dvXMxwOnY",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblBuVcKITk5GFoqk",
+          "mode": "id"
+        },
+        "id": "={{ $json.record_id }}",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "status": "sms_enviado",
+            "fecha_followup": "={{ $json.fecha_hoy }}"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {
+          "typecast": true
+        }
+      }
+    }
+  ],
+  "connections": {
+    "CRON 10am": {
+      "main": [
+        [
+          {
+            "node": "Get Leads SMS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Leads SMS": {
+      "main": [
+        [
+          {
+            "node": "Preparar Tel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Tel": {
+      "main": [
+        [
+          {
+            "node": "IF Es Celular",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Es Celular": {
+      "main": [
+        [
+          {
+            "node": "Enviar SMS Twilio",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Actualizar Sin Celular",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar SMS Twilio": {
+      "main": [
+        [
+          {
+            "node": "Actualizar SMS Enviado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

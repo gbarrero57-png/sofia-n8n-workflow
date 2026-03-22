@@ -1,0 +1,438 @@
+{
+  "name": "AI NEWS CAROUSEL PIPELINE",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{"field": "weeks", "triggerAtDay": [1, 4], "triggerAtHour": 9}]
+        }
+      },
+      "id": "c2000001-0000-0000-0000-000000000001",
+      "name": "CRON - 2x Semana",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [240, 460]
+    },
+    {
+      "parameters": {
+        "url": "https://techcrunch.com/category/artificial-intelligence/feed/",
+        "options": {}
+      },
+      "id": "c2000001-0000-0000-0000-000000000002",
+      "name": "RSS - TechCrunch AI",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1,
+      "position": [460, 280]
+    },
+    {
+      "parameters": {
+        "url": "https://feeds.feedburner.com/venturebeat/SZYF",
+        "options": {}
+      },
+      "id": "c2000001-0000-0000-0000-000000000003",
+      "name": "RSS - VentureBeat",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1,
+      "position": [460, 460]
+    },
+    {
+      "parameters": {},
+      "id": "c2000001-0000-0000-0000-000000000004",
+      "name": "Merge 1 - TC+VB",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [680, 360]
+    },
+    {
+      "parameters": {
+        "url": "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml",
+        "options": {}
+      },
+      "id": "c2000001-0000-0000-0000-000000000005",
+      "name": "RSS - The Verge AI",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1,
+      "position": [460, 640]
+    },
+    {
+      "parameters": {},
+      "id": "c2000001-0000-0000-0000-000000000006",
+      "name": "Merge 2 - Todos",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [900, 460]
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\nconst items = $input.all();\nconst now = Date.now();\nconst cutoff = now - 24 * 60 * 60 * 1000;\n\nconst filtered = [];\nconst seen = new Set();\n\nfor (const item of items) {\n  const raw = item.json;\n  const dateStr = raw.pubDate || raw.isoDate || raw.date || raw.published || '';\n  const pubDate = dateStr ? new Date(dateStr).getTime() : 0;\n  if (pubDate < cutoff) continue;\n  const title = (raw.title || '').trim();\n  if (!title) continue;\n  const hash = crypto.createHash('md5').update(title.toLowerCase()).digest('hex');\n  if (seen.has(hash)) continue;\n  seen.add(hash);\n  filtered.push({ json: {\n    titulo: title,\n    url: raw.link || raw.guid || raw.id || '',\n    descripcion: (raw.contentSnippet || raw.summary || raw.description || '').substring(0, 500),\n    pubDate: new Date(pubDate).toISOString(),\n    fuente: raw.feedTitle || 'RSS Feed',\n    hash_titulo: hash\n  }});\n}\n\nfiltered.sort((a, b) => new Date(b.json.pubDate) - new Date(a.json.pubDate));\nreturn filtered.slice(0, 10);"
+      },
+      "id": "c2000001-0000-0000-0000-000000000007",
+      "name": "Filtrar 24h + Hash",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 460]
+    },
+    {
+      "parameters": {
+        "operation": "list",
+        "base": {"__rl": true, "value": "app6a4u9dvXMxwOnY", "mode": "id"},
+        "table": {"__rl": true, "value": "CAROUSEL_TABLE_ID", "mode": "id"}
+      },
+      "id": "c2000001-0000-0000-0000-000000000008",
+      "name": "Airtable - Hashes Carousel",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [1340, 460],
+      "credentials": {
+        "airtableTokenApi": {"id": "YmCX94YiEOb7UtNi", "name": "Airtable Personal Access Token account"}
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const articles = $('Filtrar 24h + Hash').all();\nconst existing = $input.all();\n\nconst existingHashes = new Set();\nfor (const rec of existing) {\n  const h = rec.json.fields?.hash_titulo || rec.json.hash_titulo || '';\n  if (h) existingHashes.add(h);\n}\n\nconst newArticles = articles.filter(art => !existingHashes.has(art.json.hash_titulo));\n\nif (newArticles.length === 0) {\n  return [{ json: { continuar: false, mensaje: 'Sin noticias nuevas para carousel', count: 0 } }];\n}\n\nreturn newArticles.map(art => ({ json: { ...art.json, continuar: true } }));"
+      },
+      "id": "c2000001-0000-0000-0000-000000000009",
+      "name": "Eliminar Duplicados",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 460]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {"caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2},
+          "conditions": [{"id": "cond-continuar-c2", "leftValue": "={{ $json.continuar }}", "rightValue": true, "operator": {"type": "boolean", "operation": "equals"}}],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c2000001-0000-0000-0000-000000000010",
+      "name": "Hay Noticias Nuevas",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1780, 460]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nconst lista = items.map((item, i) => {\n  return (i+1) + '. TITULO: ' + item.json.titulo + '\\n   URL: ' + item.json.url + '\\n   DESCRIPCION: ' + item.json.descripcion + '\\n   FECHA: ' + item.json.pubDate;\n}).join('\\n\\n');\n\nconst articulos = items.map(i => ({\n  titulo: i.json.titulo,\n  url: i.json.url,\n  descripcion: i.json.descripcion,\n  pubDate: i.json.pubDate,\n  hash_titulo: i.json.hash_titulo\n}));\n\nreturn [{ json: { noticias_formateadas: lista, cantidad: items.length, articulos_json: JSON.stringify(articulos) } }];"
+      },
+      "id": "c2000001-0000-0000-0000-000000000011",
+      "name": "Agregar Noticias",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1980, 380]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openRouterApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"model\":\"anthropic/claude-3.7-sonnet\",\"response_format\":{\"type\":\"json_object\"},\"messages\":[{\"role\":\"system\",\"content\":\"Eres un editor experto en contenido viral de IA para carruseles educativos en Instagram latinoamericano. Seleccionas la noticia mas impactante. Respondes SOLO con JSON valido, sin texto adicional, sin markdown.\"},{\"role\":\"user\",\"content\":\"Tengo {{ $json.cantidad }} noticias recientes de IA:\\n\\n{{ $json.noticias_formateadas }}\\n\\nSelecciona la noticia MAS viral e impactante para un CARRUSEL educativo en Instagram para audiencia latinoamericana.\\n\\nCriterios: impacto cotidiano, novedad, potencial educativo, accesible para no-tecnicos, genera debate.\\n\\nResponde EXACTAMENTE en este JSON:\\n{\\n  \\\"titulo\\\": \\\"titulo exacto de la noticia\\\",\\n  \\\"url\\\": \\\"url exacta\\\",\\n  \\\"hash_titulo\\\": \\\"hash md5 del titulo\\\",\\n  \\\"score_relevancia\\\": 8,\\n  \\\"razon\\\": \\\"por que es ideal para carrusel educativo\\\"\\n}\"}]}",
+        "options": {}
+      },
+      "id": "c2000001-0000-0000-0000-000000000012",
+      "name": "OpenRouter - Selector",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2200, 380],
+      "credentials": {
+        "openRouterApi": {"id": "b7soo1kwTt0Tq0xf", "name": "OpenRouter account"}
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first();\nconst content = raw.json.choices?.[0]?.message?.content || '{}';\n\nlet selected;\ntry {\n  selected = JSON.parse(content);\n} catch(e) {\n  const match = content.match(/{[\\s\\S]*}/);\n  selected = match ? JSON.parse(match[0]) : {};\n}\n\nconst articulos = JSON.parse($('Agregar Noticias').first().json.articulos_json || '[]');\nconst matched = articulos.find(a => a.hash_titulo === selected.hash_titulo || a.titulo === selected.titulo) || {};\n\nconst score = parseFloat(selected.score_relevancia || 0);\n\nreturn [{ json: {\n  titulo: selected.titulo || matched.titulo || '',\n  url: selected.url || matched.url || '',\n  descripcion: matched.descripcion || '',\n  pubDate: matched.pubDate || '',\n  hash_titulo: selected.hash_titulo || matched.hash_titulo || '',\n  score_relevancia: score,\n  razon_seleccion: selected.razon || '',\n  continuar: score >= 7\n}}];"
+      },
+      "id": "c2000001-0000-0000-0000-000000000013",
+      "name": "Parsear Seleccion",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2420, 380]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {"caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2},
+          "conditions": [{"id": "cond-score-c2", "leftValue": "={{ $json.score_relevancia }}", "rightValue": 7, "operator": {"type": "number", "operation": "gte"}}],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c2000001-0000-0000-0000-000000000014",
+      "name": "Score suficiente (>= 7)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2640, 380]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openRouterApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "=JSON.stringify({\"model\":\"anthropic/claude-3.7-sonnet\",\"response_format\":{\"type\":\"json_object\"},\"messages\":[{\"role\":\"system\",\"content\":\"Eres un creador experto de carruseles educativos sobre IA para Instagram latinoamericano. Estilo @ia.evoluciona: directo, claro, sin jerga tecnica. Generas exactamente 7 slides. Respondes SOLO con JSON valido, sin markdown, sin texto extra.\"},{\"role\":\"user\",\"content\":\"Genera un carrusel educativo de 7 slides sobre esta noticia de IA:\\n\\nTITULO: \" + $json.titulo + \"\\nDESCRIPCION: \" + $json.descripcion + \"\\nPOR QUE ES VIRAL: \" + $json.razon_seleccion + \"\\n\\nEstructura EXACTA:\\nSlide 1 (type:hook) — Pregunta o afirmacion impactante, SIN body\\nSlide 2 (type:content) — Que paso: contexto rapido\\nSlide 3 (type:content) — Por que importa al lector\\nSlide 4 (type:content) — Como funciona: analogia cotidiana\\nSlide 5 (type:content) — Ejemplo practico del dia a dia\\nSlide 6 (type:content) — Impacto en 1-3 anos\\nSlide 7 (type:cta) — CTA claro: guardar, seguir, comentar\\n\\nREGLAS:\\n- headline: maximo 10 palabras\\n- body: maximo 30 palabras (slides 2-7)\\n- emoji_icon: 1 emoji relevante\\n- Espanol latinoamericano casual\\n- Nunca usar: revolucionario, innovador, sin precedentes\\n- Slide 1 NO tiene campo body\\n\\nJSON exacto (campos: type, headline, body, emoji_icon):\\n{\\\"slides\\\":[{\\\"type\\\":\\\"hook\\\",\\\"headline\\\":\\\"...\\\",\\\"emoji_icon\\\":\\\"🤯\\\"},{\\\"type\\\":\\\"content\\\",\\\"headline\\\":\\\"...\\\",\\\"body\\\":\\\"...\\\",\\\"emoji_icon\\\":\\\"📰\\\"},{\\\"type\\\":\\\"content\\\",\\\"headline\\\":\\\"...\\\",\\\"body\\\":\\\"...\\\",\\\"emoji_icon\\\":\\\"💡\\\"},{\\\"type\\\":\\\"content\\\",\\\"headline\\\":\\\"...\\\",\\\"body\\\":\\\"...\\\",\\\"emoji_icon\\\":\\\"⚙️\\\"},{\\\"type\\\":\\\"content\\\",\\\"headline\\\":\\\"...\\\",\\\"body\\\":\\\"...\\\",\\\"emoji_icon\\\":\\\"✅\\\"},{\\\"type\\\":\\\"content\\\",\\\"headline\\\":\\\"...\\\",\\\"body\\\":\\\"...\\\",\\\"emoji_icon\\\":\\\"🔮\\\"},{\\\"type\\\":\\\"cta\\\",\\\"headline\\\":\\\"...\\\",\\\"body\\\":\\\"Siguenos para mas noticias de IA cada semana.\\\",\\\"emoji_icon\\\":\\\"👇\\\"}]}\"}]})",
+        "options": {}
+      },
+      "id": "c2000001-0000-0000-0000-000000000015",
+      "name": "OpenRouter - Carousel Writer",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2860, 300],
+      "credentials": {
+        "openRouterApi": {"id": "b7soo1kwTt0Tq0xf", "name": "OpenRouter account"}
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first();\nconst content = raw.json.choices?.[0]?.message?.content || '{}';\n\nlet parsed;\ntry {\n  parsed = JSON.parse(content);\n} catch(e) {\n  const match = content.match(/{[\\s\\S]*}/);\n  parsed = match ? JSON.parse(match[0]) : {};\n}\n\nconst article = $('Parsear Seleccion').first().json;\nconst fecha = new Date().toISOString().split('T')[0];\n\nconst TYPES    = ['hook','content','content','content','content','content','cta'];\nconst EMOJIS   = ['🤯','📰','💡','⚙️','✅','🔮','👇'];\nconst HEADLINES = ['¿Lo viste?','Qué pasó','Por qué te importa','Cómo funciona','En la práctica','El futuro que viene','¿Te gustó este contenido?'];\nconst BODIES    = ['','Noticia importante en el mundo de la IA.','Esto afecta tu trabajo y vida diaria.','Funciona de una forma que ya conoces.','Puedes usarlo en tu trabajo hoy mismo.','En 2-3 años esto será parte de tu rutina.','Síguenos para más noticias de IA cada semana.'];\n\nlet slides = parsed.slides || [];\n\nwhile (slides.length < 7) {\n  const i = slides.length;\n  slides.push({ type: TYPES[i], headline: HEADLINES[i], body: BODIES[i], emoji_icon: EMOJIS[i] });\n}\n\nconst enriched = slides.slice(0, 7).map((s, i) => ({\n  num: i + 1,\n  type: s.type || TYPES[i],\n  headline: s.headline || HEADLINES[i],\n  body: s.body || BODIES[i],\n  emoji_icon: s.emoji_icon || EMOJIS[i],\n  titulo_noticia: article.titulo || '',\n  url_noticia: article.url || '',\n  hash_titulo: article.hash_titulo || '',\n  score: article.score_relevancia || 0,\n  fecha: fecha\n}));\n\nreturn enriched.map(s => ({ json: s }));"
+      },
+      "id": "c2000001-0000-0000-0000-000000000016",
+      "name": "Parsear Carousel",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3080, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const slide = $json;\n\n// ⚠️ Reemplazar con UUIDs reales de https://placid.app\nconst TEMPLATE_UUIDS = {\n  'hook':    'PLACID_TEMPLATE_HOOK',\n  'content': 'PLACID_TEMPLATE_NORMAL',\n  'cta':     'PLACID_TEMPLATE_CTA'\n};\n\nconst type = slide.type || 'content';\nconst template_uuid = TEMPLATE_UUIDS[type] || TEMPLATE_UUIDS['content'];\nconst counter = String(slide.num).padStart(2, '0') + ' / 07';\n\nconst layers = {\n  headline:      { text: slide.headline || '' },\n  slide_counter: { text: counter },\n  emoji_icon:    { text: slide.emoji_icon || '📌' }\n};\n\n// body solo para slides content y cta\nif (type !== 'hook' && slide.body) {\n  layers.body = { text: slide.body };\n}\n\nreturn [{ json: {\n  ...slide,\n  template_uuid,\n  placid_layers: layers\n}}];"
+      },
+      "id": "c2000001-0000-0000-0000-000000000017",
+      "name": "Preparar Placid Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3300, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.placid.app/api/rest/images",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "Authorization", "value": "Bearer PLACID_API_TOKEN"},
+            {"name": "Content-Type", "value": "application/json"}
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ template_uuid: $json.template_uuid, layers: $json.placid_layers }) }}",
+        "options": {}
+      },
+      "id": "c2000001-0000-0000-0000-000000000018",
+      "name": "Placid - Crear Imagen",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3520, 300],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {"amount": 15},
+      "id": "c2000001-0000-0000-0000-000000000019",
+      "name": "Wait - Imagen",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [3740, 300],
+      "webhookId": "c2aa0001-0000-0000-0000-000000000019"
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Placid - Crear Imagen').item.json.refresh_url || 'https://api.placid.app/api/rest/renders/' + $('Placid - Crear Imagen').item.json.id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "Authorization", "value": "Bearer PLACID_API_TOKEN"}
+          ]
+        },
+        "options": {}
+      },
+      "id": "c2000001-0000-0000-0000-000000000020",
+      "name": "Check Estado Imagen",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3960, 300],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const slideData = $('Preparar Placid Payload').item.json;\nconst checkResp = $json;\n\nconst imageUrl = checkResp.image_url || checkResp.url || '';\nconst renderId = checkResp.id || $('Placid - Crear Imagen').item.json?.id || '';\n\nreturn [{ json: {\n  num: slideData.num,\n  type: slideData.type,\n  headline: slideData.headline,\n  body: slideData.body || '',\n  emoji_icon: slideData.emoji_icon,\n  titulo_noticia: slideData.titulo_noticia,\n  url_noticia: slideData.url_noticia,\n  hash_titulo: slideData.hash_titulo,\n  score: slideData.score,\n  fecha: slideData.fecha,\n  image_url: imageUrl,\n  placid_id: renderId,\n  render_status: checkResp.status || 'unknown'\n}}];"
+      },
+      "id": "c2000001-0000-0000-0000-000000000021",
+      "name": "Merge Slide + Image URL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [4180, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const slides = $input.all();\nconst first = slides[0]?.json || {};\n\nconst slidesData = slides\n  .map(s => s.json)\n  .sort((a, b) => (a.num || 0) - (b.num || 0));\n\nconst imageUrls = slidesData.map(s => s.image_url).filter(Boolean);\n\nconst slidesTexto = slidesData\n  .map(s => s.num + '. [' + s.type + '] ' + s.headline + (s.body ? ': ' + s.body : ''))\n  .join('\\n');\n\nreturn [{ json: {\n  titulo_noticia: first.titulo_noticia || '',\n  url_noticia: first.url_noticia || '',\n  hash_titulo: first.hash_titulo || '',\n  score: first.score || 0,\n  fecha: first.fecha || new Date().toISOString().split('T')[0],\n  slides_data: slidesData,\n  slides_texto: slidesTexto,\n  image_urls: imageUrls,\n  image_urls_str: imageUrls.join('\\n'),\n  total_slides: slidesData.length,\n  slides_con_imagen: imageUrls.length\n}}];"
+      },
+      "id": "c2000001-0000-0000-0000-000000000022",
+      "name": "Collect Slides",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [4400, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openRouterApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "=JSON.stringify({\"model\":\"anthropic/claude-3.7-sonnet\",\"response_format\":{\"type\":\"json_object\"},\"messages\":[{\"role\":\"system\",\"content\":\"Eres un experto en copywriting para Instagram latinoamericano. Generas captions virales con emojis estrategicos, call to action claro y hashtags relevantes en espanol. Respondes SOLO con JSON valido.\"},{\"role\":\"user\",\"content\":\"Genera un caption de Instagram para este carrusel educativo de IA:\\n\\nNOTICIA: \" + $json.titulo_noticia + \"\\n\\nCONTENIDO DEL CARRUSEL:\\n\" + $json.slides_texto + \"\\n\\nResponde EXACTAMENTE en este JSON:\\n{\\\"caption\\\": \\\"texto del caption con emojis, max 120 palabras, termina con CTA de deslizar\\\",\\\"hashtags_post\\\": \\\"15 hashtags en espanol para incluir en el post\\\",\\\"hashtags_comentario\\\": \\\"20 hashtags adicionales para el primer comentario\\\"}\"}]})",
+        "options": {}
+      },
+      "id": "c2000001-0000-0000-0000-000000000023",
+      "name": "OpenRouter - Caption IG",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [4620, 300],
+      "credentials": {
+        "openRouterApi": {"id": "b7soo1kwTt0Tq0xf", "name": "OpenRouter account"}
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first();\nconst content = raw.json.choices?.[0]?.message?.content || '{}';\n\nlet captionData;\ntry {\n  captionData = JSON.parse(content);\n} catch(e) {\n  const match = content.match(/{[\\s\\S]*}/);\n  captionData = match ? JSON.parse(match[0]) : {};\n}\n\nconst carousel = $('Collect Slides').first().json;\n\nreturn [{ json: {\n  // Noticia\n  titulo_noticia: carousel.titulo_noticia,\n  url_noticia: carousel.url_noticia,\n  hash_titulo: carousel.hash_titulo,\n  score: carousel.score,\n  fecha: carousel.fecha,\n  // Slides\n  slides_data: carousel.slides_data,\n  slides_texto: carousel.slides_texto,\n  total_slides: carousel.total_slides,\n  slides_con_imagen: carousel.slides_con_imagen,\n  // Imagenes\n  image_urls: carousel.image_urls,\n  image_urls_str: carousel.image_urls_str,\n  // Caption\n  caption_ig: captionData.caption || '',\n  hashtags_post: captionData.hashtags_post || '#IA #InteligenciaArtificial #Tecnologia #AILatam',\n  hashtags_comentario: captionData.hashtags_comentario || '',\n  // Para Airtable\n  slides_json: JSON.stringify(carousel.slides_data)\n}}];"
+      },
+      "id": "c2000001-0000-0000-0000-000000000024",
+      "name": "Parsear Caption",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [4840, 300]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {"__rl": true, "value": "app6a4u9dvXMxwOnY", "mode": "id"},
+        "table": {"__rl": true, "value": "CAROUSEL_TABLE_ID", "mode": "id"},
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "titulo": "={{ $json.titulo_noticia }}",
+            "hash_titulo": "={{ $json.hash_titulo }}",
+            "fecha": "={{ $json.fecha }}",
+            "fuente_url": "={{ $json.url_noticia }}",
+            "score_relevancia": "={{ $json.score }}",
+            "total_slides": "={{ $json.total_slides }}",
+            "slides_con_imagen": "={{ $json.slides_con_imagen }}",
+            "slides_json": "={{ $json.slides_json }}",
+            "caption_ig": "={{ $json.caption_ig }}",
+            "hashtags_post": "={{ $json.hashtags_post }}",
+            "hashtags_comentario": "={{ $json.hashtags_comentario }}",
+            "image_urls": "={{ $json.image_urls_str }}",
+            "status": "done"
+          }
+        },
+        "options": {}
+      },
+      "id": "c2000001-0000-0000-0000-000000000025",
+      "name": "Log Airtable - Carousel",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [5060, 300],
+      "credentials": {
+        "airtableTokenApi": {"id": "YmCX94YiEOb7UtNi", "name": "Airtable Personal Access Token account"}
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "YOUR_TELEGRAM_CHAT_ID",
+        "text": "=🎨 *Carousel Listo para Publicar*\n\n📰 *Noticia:* {{ $('Parsear Caption').first().json.titulo_noticia }}\n📅 *Fecha:* {{ $('Parsear Caption').first().json.fecha }}\n⭐ *Score:* {{ $('Parsear Caption').first().json.score }}/10\n🖼 *Slides generados:* {{ $('Parsear Caption').first().json.slides_con_imagen }}/7\n\n---\n📝 *Caption IG:*\n{{ $('Parsear Caption').first().json.caption_ig }}\n\n🏷 *Hashtags post:*\n{{ $('Parsear Caption').first().json.hashtags_post }}\n\n💬 *Primer comentario:*\n{{ $('Parsear Caption').first().json.hashtags_comentario }}\n\n---\n🖼 *URLs de imágenes:*\n{{ $('Parsear Caption').first().json.image_urls_str }}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "c2000001-0000-0000-0000-000000000026",
+      "name": "Notificar Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [5280, 300],
+      "credentials": {
+        "telegramApi": {"id": "cSaxAEvIePNLpINc", "name": "Telegram account"}
+      }
+    },
+    {
+      "parameters": {},
+      "id": "c2000001-0000-0000-0000-000000000027",
+      "name": "Error Handler",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [5060, 540]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {"__rl": true, "value": "app6a4u9dvXMxwOnY", "mode": "id"},
+        "table": {"__rl": true, "value": "CAROUSEL_TABLE_ID", "mode": "id"},
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "titulo": "={{ $json.execution?.workflowData?.name || 'AI NEWS CAROUSEL ERROR' }}",
+            "hash_titulo": "=carousel_error_{{ Date.now() }}",
+            "fecha": "={{ new Date().toISOString().split('T')[0] }}",
+            "status": "error",
+            "slides_json": "={{ $json.error?.message || JSON.stringify($json).substring(0, 2000) }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "c2000001-0000-0000-0000-000000000028",
+      "name": "Log Error Airtable",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [5280, 540],
+      "credentials": {
+        "airtableTokenApi": {"id": "YmCX94YiEOb7UtNi", "name": "Airtable Personal Access Token account"}
+      }
+    }
+  ],
+  "connections": {
+    "CRON - 2x Semana": {
+      "main": [[
+        {"node": "RSS - TechCrunch AI", "type": "main", "index": 0},
+        {"node": "RSS - VentureBeat", "type": "main", "index": 0},
+        {"node": "RSS - The Verge AI", "type": "main", "index": 0}
+      ]]
+    },
+    "RSS - TechCrunch AI": {"main": [[{"node": "Merge 1 - TC+VB", "type": "main", "index": 0}]]},
+    "RSS - VentureBeat": {"main": [[{"node": "Merge 1 - TC+VB", "type": "main", "index": 1}]]},
+    "Merge 1 - TC+VB": {"main": [[{"node": "Merge 2 - Todos", "type": "main", "index": 0}]]},
+    "RSS - The Verge AI": {"main": [[{"node": "Merge 2 - Todos", "type": "main", "index": 1}]]},
+    "Merge 2 - Todos": {"main": [[{"node": "Filtrar 24h + Hash", "type": "main", "index": 0}]]},
+    "Filtrar 24h + Hash": {"main": [[{"node": "Airtable - Hashes Carousel", "type": "main", "index": 0}]]},
+    "Airtable - Hashes Carousel": {"main": [[{"node": "Eliminar Duplicados", "type": "main", "index": 0}]]},
+    "Eliminar Duplicados": {"main": [[{"node": "Hay Noticias Nuevas", "type": "main", "index": 0}]]},
+    "Hay Noticias Nuevas": {"main": [[{"node": "Agregar Noticias", "type": "main", "index": 0}], []]},
+    "Agregar Noticias": {"main": [[{"node": "OpenRouter - Selector", "type": "main", "index": 0}]]},
+    "OpenRouter - Selector": {"main": [[{"node": "Parsear Seleccion", "type": "main", "index": 0}]]},
+    "Parsear Seleccion": {"main": [[{"node": "Score suficiente (>= 7)", "type": "main", "index": 0}]]},
+    "Score suficiente (>= 7)": {"main": [[{"node": "OpenRouter - Carousel Writer", "type": "main", "index": 0}], []]},
+    "OpenRouter - Carousel Writer": {"main": [[{"node": "Parsear Carousel", "type": "main", "index": 0}]]},
+    "Parsear Carousel": {"main": [[{"node": "Preparar Placid Payload", "type": "main", "index": 0}]]},
+    "Preparar Placid Payload": {"main": [[{"node": "Placid - Crear Imagen", "type": "main", "index": 0}]]},
+    "Placid - Crear Imagen": {"main": [[{"node": "Wait - Imagen", "type": "main", "index": 0}]]},
+    "Wait - Imagen": {"main": [[{"node": "Check Estado Imagen", "type": "main", "index": 0}]]},
+    "Check Estado Imagen": {"main": [[{"node": "Merge Slide + Image URL", "type": "main", "index": 0}]]},
+    "Merge Slide + Image URL": {"main": [[{"node": "Collect Slides", "type": "main", "index": 0}]]},
+    "Collect Slides": {"main": [[{"node": "OpenRouter - Caption IG", "type": "main", "index": 0}]]},
+    "OpenRouter - Caption IG": {"main": [[{"node": "Parsear Caption", "type": "main", "index": 0}]]},
+    "Parsear Caption": {"main": [[{"node": "Log Airtable - Carousel", "type": "main", "index": 0}]]},
+    "Log Airtable - Carousel": {"main": [[{"node": "Notificar Telegram", "type": "main", "index": 0}]]},
+    "Error Handler": {"main": [[{"node": "Log Error Airtable", "type": "main", "index": 0}]]}
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false,
+    "errorWorkflow": ""
+  },
+  "staticData": null
+}

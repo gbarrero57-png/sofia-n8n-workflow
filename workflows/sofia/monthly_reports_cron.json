@@ -1,0 +1,62 @@
+{
+  "name": "SofIA - Monthly Reports Cron",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": { "interval": [{ "field": "cronExpression", "expression": "0 8 1 * *" }] }
+      },
+      "id": "cron-monthly",
+      "name": "Cron Día 1 del Mes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get all clinic IDs from Supabase\nconst SUPABASE_URL = 'https://inhyrrjidhzrbqecnptn.supabase.co';\nconst SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImluaHlycmppZGh6cmJxZWNucHRuIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MTAwNzU3NSwiZXhwIjoyMDg2NTgzNTc1fQ.-YwX0Qf4Gn8MdjFbLxCYuCJV1OzWl2qWWk4hKuU6z7k';\n\nconst res = await this.helpers.httpRequest({\n  method: 'GET',\n  url: `${SUPABASE_URL}/rest/v1/clinics?select=id,name,admin_email&active=eq.true`,\n  headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` }\n});\n\nconst clinics = Array.isArray(res) ? res : [];\n\n// Last month YYYY-MM\nconst d = new Date();\nd.setDate(1);\nd.setMonth(d.getMonth() - 1);\nconst month = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;\n\nconsole.log(`[Monthly Reports] ${clinics.length} clinics, month: ${month}`);\n\nreturn clinics\n  .filter(c => c.admin_email)\n  .map(c => ({ json: { clinic_id: c.id, clinic_name: c.name, month } }));"
+      },
+      "id": "code-get-clinics",
+      "name": "Obtener Clínicas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://sofia.redsolucionesti.com/api/admin/reports/generate",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "Cookie", "value": "sofia_token=internal-cron-token" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={{ JSON.stringify({ clinic_id: $json.clinic_id, month: $json.month }) }}",
+        "options": { "timeout": 60000 }
+      },
+      "id": "http-generate",
+      "name": "Generar Reporte",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const results = $input.all();\nlet ok = 0, fail = 0;\nfor (const item of results) {\n  if (item.json.ok) ok++; else { fail++; console.log('[FAIL]', item.json); }\n}\nconsole.log(`[Monthly Reports] Done: ${ok} sent, ${fail} failed`);\nreturn [{ json: { ok, fail, total: results.length } }];"
+      },
+      "id": "code-summary",
+      "name": "Resumen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    }
+  ],
+  "connections": {
+    "Cron Día 1 del Mes": { "main": [[{ "node": "Obtener Clínicas", "type": "main", "index": 0 }]] },
+    "Obtener Clínicas":   { "main": [[{ "node": "Generar Reporte",  "type": "main", "index": 0 }]] },
+    "Generar Reporte":    { "main": [[{ "node": "Resumen",          "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" }
+}

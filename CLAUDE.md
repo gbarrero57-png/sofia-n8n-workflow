@@ -160,46 +160,122 @@ Ambos proyectos bajo **MIT License** - Open Source con libertad de uso comercial
 
 **Estado**: Activo y listo para ayudarte con tus workflows de n8n.
 **Repositorios locales**: Clonados y disponibles
-**Última actualización**: 2026-02-06
+**Última actualización**: 2026-03-22
 
 ---
 
-## Repositorios Locales
+## Estructura del Proyecto
 
-Ambos repositorios están clonados localmente en este directorio:
+```
+n8n_workflow_claudio/
+├── CLAUDE.md                    ← Este archivo (instrucciones para Claudio)
+├── README.md                    ← Guía rápida de uso
+├── .gitignore
+├── .github/                     ← CI/CD (GitHub Actions)
+│   └── workflows/
+│       ├── nightly-tests.yml    ← Tests Python nocturnos + notificación Telegram
+│       ├── deploy-workflow.yml  ← Deploy de workflows a n8n
+│       └── test-sofia-workflow.yml
+│
+├── n8n-mcp/                     ← MCP Server (gitignored — clonar localmente)
+├── n8n-skills/                  ← Skills especializadas (gitignored)
+│
+├── saas/                        ← Archivos runtime (ver saas/README.md)
+│   ├── .env                     ← Credenciales (SECRETO, nunca commitear)
+│   ├── sofia_live.json          ← Cache live de Sofia (auto-generado)
+│   └── reminders_live.json      ← Cache live de Reminders (auto-generado)
+│
+├── workflows/                   ← Fuente canónica de todos los workflows
+│   ├── README.md                ← Descripción de cada workflow
+│   ├── sofia/
+│   │   ├── sofia_main.json      ← Workflow principal SofIA (54 nodos, ID: 37SLdWISQLgkHeXk)
+│   │   ├── sofia_reminders.json ← Cron recordatorios 24h (ID: FCSJrGj5bLMuytr7)
+│   │   └── monthly_reports_cron.json
+│   ├── libreria/
+│   │   ├── w1_cotizar.json      ← Cotización con OpenAI Vision (ID: WGnHElPWv9amUte8)
+│   │   ├── w2_confirmar.json    ← Confirmar cotización (ID: JbAMAmCqGTptWC5d)
+│   │   ├── w3_comprobante.json  ← Comprobante de pago (ID: mkoRhdwXgxx17R70)
+│   │   └── w4_entrega.json      ← Entrega recoger/envío (ID: f4ulTAbkVVYUp1UR)
+│   ├── ai-news/
+│   │   ├── avatar_pipeline.json ← Avatar IA D-ID+ElevenLabs (ID: O784FZABOxpCkq1y)
+│   │   └── carousel_pipeline.json ← Carrusel Instagram (ID: cvRPJ8pgGEdejQIK)
+│   └── outreach/
+│       ├── email_inicial.json
+│       ├── sms_followup.json
+│       └── llamada_followup.json
+│
+├── supabase/
+│   └── migrations/              ← 26 migraciones SQL aplicadas en producción
+│       └── README.md            ← Tabla con descripción de cada migración
+│
+├── scripts/                     ← Ver scripts/README.md
+│   ├── README.md
+│   ├── patches/
+│   │   ├── README.md            ← Explica que los patches ya están aplicados
+│   │   └── archive/             ← Historial de patches aplicados (no ejecutar)
+│   ├── ops/                     ← Scripts operacionales (backup, seed, onboard)
+│   ├── tests/                   ← Tests de integración JS
+│   │   └── README.md
+│   ├── builders/                ← Constructores de workflows (outreach, leadgen)
+│   └── infrastructure/          ← Docker, nginx, env.example
+│
+└── testing/                     ← Suite de tests Python (CI/CD nightly)
+    └── README.md
+```
+
+## Repositorios de Herramientas
 
 ### n8n-mcp
-**Ubicación**: `c:\Users\Barbara\Documents\n8n_workflow_claudio\n8n-mcp\`
+**Ubicación**: `n8n-mcp/` (gitignored — clonar desde https://github.com/czlonkowski/n8n-mcp)
 
-**Contenido clave**:
-- `/src` - Código fuente del servidor MCP
-- `/dist` - Archivos compilados
-- `/data` - Datos y plantillas
-- `/docs` - Documentación completa
-- `/examples` - Ejemplos de uso
-- `n8n-nodes.db` - Base de datos SQLite con información de nodos
-- `package.json` - Dependencias Node.js
-
-**Estado**: ✅ Instalado, compilado y configurado
-
-**Configuración API**:
-- URL: https://workflows.n8n.redsolucionesti.com
-- API Key: Configurada en `.env`
-- Conexión: ✅ Verificada y funcionando
+- Estado: ✅ Instalado, compilado y configurado
+- API URL: https://workflows.n8n.redsolucionesti.com
+- API Key: Configurada en `n8n-mcp/.env`
+- Base de datos: `n8n-nodes.db` pre-construida (1,084 nodos)
 
 ### n8n-skills
-**Ubicación**: `c:\Users\Barbara\Documents\n8n_workflow_claudio\n8n-skills\`
+**Ubicación**: `n8n-skills/` (gitignored — clonar desde https://github.com/czlonkowski/n8n-skills)
 
-**Contenido clave**:
-- `/skills` - Las 7 habilidades:
-  - n8n-expression-syntax
-  - n8n-mcp-tools-expert
-  - n8n-workflow-patterns
-  - n8n-validation-expert
-  - n8n-node-configuration
-  - n8n-code-javascript
-  - n8n-code-python
-- `/docs` - Guías de instalación y uso
-- `/evaluations` - Casos de prueba
+- Estado: Clonado y listo
+- 7 habilidades disponibles en `/skills/`
 
-**Estado**: Clonado y listo para usar
+## Arquitectura SofIA
+
+### ⚠️ Sin Google Calendar
+SofIA **no usa Google Calendar**. El calendario está 100% en Supabase:
+- **Leer disponibilidad**: `GET /rest/v1/appointments` filtra citas existentes por `clinic_id + start_time`
+- **Crear cita**: `POST /rest/v1/appointments` inserta directamente en la tabla
+- Beneficio: sin OAuth tokens que expiran, sin dependencias externas
+
+### Flujo Principal (54 nodos)
+```
+Chatwoot Webhook → Verificar Token → Validar Input → Resolver Clinica
+→ Bot Pause Check → Merge Clinic Data → IsUserMessage
+→ WhatsApp Safe Check → Pre-Clasificador → Normalizar Intent
+→ ¿Es CREATE_EVENT? → Check Slot Confirmation State
+→ [Flujo agendamiento]:
+   Explicar Agendamiento → Leer Citas Supabase → Calcular Slots
+   → Seleccionar 3 Mejores → Formatear Oferta → Enviar Chatwoot
+   → Marcar Esperando Confirmación
+→ [Confirmación de slot]:
+   Lock de Slot → Guardar Cita Supabase → Confirmar al Paciente
+→ Registrar Métrica → Registrar Ejecución
+```
+
+### Variables de Entorno Requeridas (en `saas/.env`)
+```
+N8N_SUPABASE_URL=https://inhyrrjidhzrbqecnptn.supabase.co
+N8N_SUPABASE_SERVICE_KEY=...
+N8N_CHATWOOT_API_KEY=...
+N8N_OPENAI_API_KEY=...
+```
+
+## Lecciones Críticas de n8n
+
+- **Code nodes typeVersion 2**: usar `$input.first()` NO `$input.item` (el task-runner lo stripea)
+- **Variables bash**: `$json` en heredocs bash se expande como variable vacía → usar `.join('\n')` en Node.js scripts para guardar código
+- **n8n Code node**: después de nodos httpRequest nativos, `$json` pierde contexto → usar `$node["NombreNodo"].json`
+- **PUT workflow API**: solo `name, nodes, connections, settings, staticData` — campos extra causan 400
+- **Connections**: al renombrar/eliminar nodos, actualizar TODAS las referencias en el objeto `connections`
+- **n8n 2.4.6 Webhook**: `options.binaryData: true` para recibir multipart/form-data
+- **Google Sheets 0-items**: usar HTTP Request a Sheets API v4 en lugar del nodo GSheets nativo

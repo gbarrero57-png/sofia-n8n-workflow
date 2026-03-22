@@ -1,0 +1,40 @@
+
+======================================================================
+                        FINAL TEST REPORT
+======================================================================
+
+Date: 2026-03-18 16:23:27
+Duration: 46.93 seconds
+
+SUMMARY:
+  Total Tests:   5
+  Passed:        3
+  Failed:        2
+  Success Rate:  60.0%
+
+TEST BREAKDOWN:
+
+[FAIL] Regression:
+   Passed: 3/5 (60%)
+   Failed tests:
+     - Regression: HUMAN escalation works: HUMAN escalation broken
+     - Regression: No infinite loops: Timeout or not finished
+
+FAILED TESTS DETAILS:
+
+  [FAIL] Regression: HUMAN escalation works
+    Message: HUMAN escalation broken
+    Details:
+      - intent: INFO
+      - escalated: False
+      - execution_id: 5810
+
+  [FAIL] Regression: No infinite loops
+    Message: Timeout or not finished
+    Details:
+      - elapsed_seconds: 17.201332092285156
+      - finished: False
+      - execution_id: 5812
+
+RECOMMENDATIONS:
+  [FAIL] Critical failures detected. Workflow needs fixes before deployment.

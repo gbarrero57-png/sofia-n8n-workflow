@@ -1,0 +1,251 @@
+{
+  "clinic": {
+    "name": "Clínica Dental San Marcos",
+    "subdomain": "sanmarcos",
+    "phone": "+51912345678",
+    "address": "Av. Universitaria 1234, San Miguel, Lima",
+    "timezone": "America/Lima",
+    "bot_config": {
+      "max_bot_interactions": 3,
+      "business_hours_start": 8,
+      "business_hours_end": 22,
+      "reminder_hours_before": 24,
+      "welcome_message": "Hola 👋 Soy SofIA, la asistente virtual de Clínica Dental San Marcos. ¿En qué puedo ayudarte hoy?",
+      "escalation_message": "Entiendo, déjame conectarte con uno de nuestros asesores. Un momento por favor 🙏"
+    },
+    "branding_config": {
+      "primary_color": "#7c3aed",
+      "logo_url": "",
+      "whatsapp_number": "+51912345678"
+    }
+  },
+  "admin": {
+    "email": "admin@clinicasanmarcos.com",
+    "password": "CambiarEsto2024!",
+    "full_name": "Dr. Carlos García"
+  },
+  "chatwoot": {
+    "account_id": 2,
+    "inbox_name": "SofIA - San Marcos",
+    "webhook_url": "https://workflows.n8n.redsolucionesti.com/webhook/chatwoot-sofia"
+  },
+  "knowledge_base": [
+    {
+      "category": "horarios",
+      "question": "¿Cuál es el horario de atención?",
+      "answer": "Atendemos de lunes a viernes de 8:00am a 8:00pm, y sábados de 9:00am a 2:00pm. Los domingos no atendemos.",
+      "keywords": ["horario", "atienden", "horas", "lunes", "viernes", "sábado", "abierto", "cerrado"],
+      "priority": 10
+    },
+    {
+      "category": "horarios",
+      "question": "¿Atienden los fines de semana?",
+      "answer": "Sí, atendemos los sábados de 9:00am a 2:00pm. Los domingos estamos cerrados. ¿Quieres agendar una cita para el sábado?",
+      "keywords": ["fin de semana", "sábado", "domingo", "weekend"],
+      "priority": 9
+    },
+    {
+      "category": "horarios",
+      "question": "¿Tienen atención de urgencias?",
+      "answer": "Sí, atendemos urgencias dentales dentro de nuestro horario (lunes a viernes 8am-8pm, sábados 9am-2pm). Para urgencias fuera de horario, llámanos al WhatsApp y un especialista te orientará.",
+      "keywords": ["urgencia", "emergencia", "dolor", "hoy", "inmediato", "rápido"],
+      "priority": 10
+    },
+    {
+      "category": "ubicacion",
+      "question": "¿Dónde están ubicados?",
+      "answer": "Estamos en Av. Universitaria 1234, San Miguel, Lima. A media cuadra del Parque San Miguel. Hay estacionamiento disponible para pacientes.",
+      "keywords": ["dirección", "ubicación", "dónde", "lugar", "mapa", "cómo llegar"],
+      "priority": 10
+    },
+    {
+      "category": "ubicacion",
+      "question": "¿Cómo llego a la clínica?",
+      "answer": "Estamos en Av. Universitaria 1234, San Miguel. Puedes llegar en Metro (Estación San Miguel, Línea 1) o en bus por la Av. Universitaria. Google Maps: https://maps.google.com/?q=Av+Universitaria+1234+San+Miguel",
+      "keywords": ["llegar", "transporte", "metro", "bus", "cómo ir", "referencia"],
+      "priority": 8
+    },
+    {
+      "category": "servicios",
+      "question": "¿Qué servicios ofrecen?",
+      "answer": "Ofrecemos: Limpieza dental, Blanqueamiento, Ortodoncia (brackets metálicos y estéticos), Implantes dentales, Endodoncia (tratamiento de conducto), Extracciones, Carillas, Odontopediatría y Emergencias. ¿Te interesa algún servicio en particular?",
+      "keywords": ["servicios", "tratamientos", "qué hacen", "especialidades", "ofrecen"],
+      "priority": 10
+    },
+    {
+      "category": "servicios",
+      "question": "¿Hacen implantes dentales?",
+      "answer": "Sí, realizamos implantes dentales con tecnología de última generación. El proceso incluye: evaluación inicial, colocación del implante, período de oseointegración (3-6 meses) y colocación de la corona. Agenda una consulta diagnóstica para evaluar tu caso.",
+      "keywords": ["implante", "implantes", "diente perdido", "falta", "reemplazar"],
+      "priority": 9
+    },
+    {
+      "category": "servicios",
+      "question": "¿Atienden niños?",
+      "answer": "Sí, contamos con odontopediatría especializada para niños desde 3 años. Nuestros especialistas están capacitados para hacer la experiencia dental agradable y sin miedo. ¿Qué edad tiene tu hijo/a?",
+      "keywords": ["niño", "niña", "hijo", "hija", "bebé", "infantil", "pediatría", "odontopediatría", "años"],
+      "priority": 9
+    },
+    {
+      "category": "servicios",
+      "question": "¿Realizan blanqueamiento dental?",
+      "answer": "Sí, ofrecemos blanqueamiento dental profesional en consultorio (1 sesión de 1 hora) y blanqueamiento en casa (kit personalizado para 2 semanas). Los resultados duran 1-2 años con buena higiene. ¿Te gustaría agendar una evaluación?",
+      "keywords": ["blanqueamiento", "blanquear", "aclarar", "dientes blancos", "manchas", "amarillo"],
+      "priority": 9
+    },
+    {
+      "category": "servicios",
+      "question": "¿Hacen ortodoncia?",
+      "answer": "Sí, ofrecemos ortodoncia con brackets metálicos, brackets estéticos (cerámica) y alineadores transparentes (tipo Invisalign). El tratamiento dura entre 18 y 36 meses según el caso. Incluye consulta inicial gratuita de valoración.",
+      "keywords": ["ortodoncia", "brackets", "aparatos", "dientes chuecos", "alineadores", "invisalign"],
+      "priority": 9
+    },
+    {
+      "category": "precios",
+      "question": "¿Cuánto cuesta una consulta?",
+      "answer": "La consulta de evaluación general cuesta S/. 50. Para tratamientos específicos (implantes, ortodoncia, endodoncia), la consulta de diagnóstico es gratuita. ¿Qué tipo de consulta necesitas?",
+      "keywords": ["precio", "costo", "cuánto", "valor", "consulta", "cuesta"],
+      "priority": 10
+    },
+    {
+      "category": "precios",
+      "question": "¿Cuánto cuesta una limpieza dental?",
+      "answer": "La limpieza dental profisional cuesta S/. 80 e incluye: profilaxis, fluorización y revisión general. Si es tu primera visita, también incluye radiografía digital sin costo adicional.",
+      "keywords": ["limpieza", "profilaxis", "precio limpieza", "cuánto limpieza"],
+      "priority": 9
+    },
+    {
+      "category": "precios",
+      "question": "¿Cuánto cuestan los brackets?",
+      "answer": "El costo de ortodoncia incluye: Brackets metálicos desde S/. 2,500 (tratamiento completo, incluye mensualidades). Brackets estéticos/cerámica desde S/. 3,200. Alineadores transparentes desde S/. 4,500. Agenda tu consulta de valoración gratuita para un presupuesto exacto.",
+      "keywords": ["brackets", "ortodoncia precio", "cuánto ortodoncia", "precio aparatos"],
+      "priority": 9
+    },
+    {
+      "category": "precios",
+      "question": "¿Cuánto cuesta un implante?",
+      "answer": "Los implantes dentales tienen un costo desde S/. 2,800 (incluye implante + corona). El precio final depende del tipo de implante y evaluación del hueso. Ofrecemos planes de financiamiento sin intereses a 12 meses.",
+      "keywords": ["implante precio", "cuánto implante", "costo implante"],
+      "priority": 9
+    },
+    {
+      "category": "precios",
+      "question": "¿Cuánto cuesta el blanqueamiento?",
+      "answer": "Blanqueamiento en consultorio: S/. 350 (1 sesión, resultados inmediatos). Blanqueamiento en casa: S/. 250 (kit personalizado, 2 semanas). Pack completo (consultorio + mantenimiento en casa): S/. 500.",
+      "keywords": ["blanqueamiento precio", "cuánto blanqueamiento", "costo blanquear"],
+      "priority": 8
+    },
+    {
+      "category": "pagos",
+      "question": "¿Qué formas de pago aceptan?",
+      "answer": "Aceptamos: Efectivo, Tarjetas de crédito y débito (Visa, Mastercard, Amex), Transferencias bancarias, Yape y Plin. Para tratamientos mayores a S/. 500, ofrecemos financiamiento en cuotas sin intereses.",
+      "keywords": ["pago", "tarjeta", "efectivo", "yape", "plin", "transferencia", "cuotas", "financiamiento"],
+      "priority": 9
+    },
+    {
+      "category": "pagos",
+      "question": "¿Tienen facilidades de pago o cuotas?",
+      "answer": "Sí, para tratamientos de ortodoncia, implantes y tratamientos mayores, ofrecemos: Cuotas mensuales sin intereses (hasta 12 meses), descuento del 5% por pago al contado. Consulta con nuestra asesora para armar tu plan de pagos personalizado.",
+      "keywords": ["cuotas", "facilidades", "financiamiento", "plazos", "mensualidades", "sin interés"],
+      "priority": 9
+    },
+    {
+      "category": "seguros",
+      "question": "¿Aceptan seguros médicos?",
+      "answer": "Trabajamos con algunos seguros privados. Actualmente tenemos convenio con: RIMAC, Pacífico, Mapfre (cobertura parcial según plan). No trabajamos con EsSalud. Te recomendamos verificar tu cobertura antes de la cita.",
+      "keywords": ["seguro", "essalud", "rimac", "pacifico", "mapfre", "cobertura", "convenio"],
+      "priority": 9
+    },
+    {
+      "category": "seguros",
+      "question": "¿Trabajan con EsSalud?",
+      "answer": "No, no atendemos con EsSalud. Somos una clínica privada. Sin embargo, tenemos precios accesibles y planes de financiamiento. También aceptamos RIMAC, Pacífico y Mapfre con cobertura parcial.",
+      "keywords": ["essalud", "seguro social", "sis", "gobierno"],
+      "priority": 8
+    },
+    {
+      "category": "preparacion",
+      "question": "¿Cómo me preparo para una extracción?",
+      "answer": "Para extracción dental: No es necesario ayuno. Infórmanos si tomas anticoagulantes, aspirina o tienes diabetes/hipertensión. Ven con una persona de acompañante si es cirugía oral mayor. Trae tu seguro si aplica. ¿Tienes alguna condición médica que debamos saber?",
+      "keywords": ["extracción", "sacar", "muela", "preparación extracción", "antes extracción"],
+      "priority": 7
+    },
+    {
+      "category": "preparacion",
+      "question": "¿Qué hacer después de una extracción?",
+      "answer": "Después de la extracción: Morder el algodón 30-45 minutos. No escupir ni enjuagar las primeras 24 horas. Aplicar frío (hielo envuelto) 10 min sí / 10 min no durante 2 horas. Tomar el analgésico recetado. Comer alimentos blandos y fríos las primeras 24 horas. Si el sangrado no cede o hay fiebre, llámanos.",
+      "keywords": ["después extracción", "post extracción", "cuidados", "sangrado", "qué hacer"],
+      "priority": 7
+    },
+    {
+      "category": "preparacion",
+      "question": "¿Me dolerá la extracción?",
+      "answer": "No, la extracción se realiza con anestesia local. Sentirás presión pero no dolor. El efecto dura 2-4 horas. Después puede haber molestia leve que se controla con ibuprofeno o el analgésico recetado. La mayoría de pacientes describe la extracción como menos molesta de lo que esperaban 😊",
+      "keywords": ["dolor extracción", "duele", "anestesia", "miedo"],
+      "priority": 8
+    },
+    {
+      "category": "preparacion",
+      "question": "¿Qué es el tratamiento de conducto?",
+      "answer": "La endodoncia (tratamiento de conducto) limpia el interior del diente infectado para salvarlo. Se hace con anestesia local, no duele durante el procedimiento. Tarda 1-2 sesiones de 45-60 minutos. Después se coloca una corona para proteger el diente. Es la alternativa a la extracción.",
+      "keywords": ["conducto", "endodoncia", "nervio", "infección", "matar nervio"],
+      "priority": 7
+    },
+    {
+      "category": "general",
+      "question": "¿Cómo puedo agendar una cita?",
+      "answer": "Puedes agendar tu cita aquí mismo por WhatsApp o llamarnos al +51912345678. Dime qué servicio necesitas y te daré la próxima disponibilidad 😊",
+      "keywords": ["cita", "agendar", "reservar", "turno", "cuándo", "disponibilidad"],
+      "priority": 10
+    },
+    {
+      "category": "general",
+      "question": "¿Cómo puedo cancelar o cambiar mi cita?",
+      "answer": "Puedes cancelar o reprogramar tu cita por este WhatsApp con mínimo 4 horas de anticipación. Después de cancelar, podemos agendar inmediatamente para otra fecha. ¿Quieres reprogramar?",
+      "keywords": ["cancelar", "cambiar", "reprogramar", "reagendar", "no puedo ir"],
+      "priority": 9
+    },
+    {
+      "category": "general",
+      "question": "¿Cuánto tiempo dura una consulta?",
+      "answer": "Depende del tratamiento: Consulta general: 30-45 minutos. Limpieza dental: 45-60 minutos. Extracción simple: 20-30 minutos. Endodoncia: 60-90 minutos. Para citas a la hora del almuerzo o con tiempo limitado, dímelo y te recomiendo el horario más adecuado.",
+      "keywords": ["cuánto tiempo", "duración", "demora", "tiempo", "minutos"],
+      "priority": 7
+    },
+    {
+      "category": "general",
+      "question": "¿Atienden pacientes embarazadas?",
+      "answer": "Sí, atendemos pacientes embarazadas. El mejor momento es el segundo trimestre (semanas 14-28). Podemos hacer: limpiezas, extracciones urgentes, y tratamientos con anestesia segura. Siempre informamos al especialista sobre el embarazo para adaptar el tratamiento. ¿En qué semana de gestación estás?",
+      "keywords": ["embarazada", "embarazo", "gestante", "gestación", "meses embarazo"],
+      "priority": 8
+    },
+    {
+      "category": "general",
+      "question": "¿Atienden pacientes diabéticos?",
+      "answer": "Sí, atendemos pacientes con diabetes. Es importante informarnos antes para coordinar con tu médico si es necesario y programar la cita en el mejor momento del día. Los diabéticos tienen mayor riesgo de infección, por lo que ajustamos el protocolo de antibióticos según el caso.",
+      "keywords": ["diabetes", "diabético", "azúcar", "glucosa"],
+      "priority": 8
+    },
+    {
+      "category": "general",
+      "question": "¿Toman radiografías?",
+      "answer": "Sí, contamos con radiografía digital de última generación (90% menos radiación que la convencional). Las radiografías son fundamentales para diagnosticar correctamente. Para primera visita incluimos radiografía panorámica sin costo adicional en tratamientos mayores.",
+      "keywords": ["radiografía", "rayos x", "placa dental", "radiación"],
+      "priority": 6
+    },
+    {
+      "category": "general",
+      "question": "¿Tienen WhatsApp?",
+      "answer": "¡Sí, estás hablando por WhatsApp con SofIA, nuestra asistente virtual! Para hablar directamente con un asesor humano, dime y te transfiero. También puedes llamarnos al +51912345678 en horario de atención.",
+      "keywords": ["whatsapp", "número", "contacto", "teléfono", "llamar", "humano", "persona"],
+      "priority": 8
+    },
+    {
+      "category": "general",
+      "question": "¿Son una clínica de confianza?",
+      "answer": "Somos una clínica dental con más de 10 años de experiencia en Lima. Contamos con especialistas certificados, equipos de última generación y más de 5,000 pacientes atendidos. Todos nuestros tratamientos cuentan con garantía. Puedes ver nuestras reseñas en Google Maps 5⭐",
+      "keywords": ["confianza", "experiencia", "años", "garantía", "buena", "recomendada", "reconocida"],
+      "priority": 7
+    }
+  ]
+}

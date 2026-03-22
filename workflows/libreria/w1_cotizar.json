@@ -1,0 +1,399 @@
+{
+  "name": "Libreria - W1: Cotizacion",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "libreria/cotizar",
+        "responseMode": "responseNode",
+        "options": {
+          "binaryData": true
+        }
+      },
+      "id": "wh-cotizacion",
+      "name": "Webhook Cotizacion",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "libreria-cotizar"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================\n// SETUP: Generar UUID + Extraer imagen a base64\n// ============================================\nconst crypto = require('crypto');\n\n// Generar ID único para esta cotización\nconst cotizacion_id = crypto.randomUUID();\nconst fecha = new Date().toISOString();\n\n// Normalizar body (puede venir en .body o en raíz)\nconst body = $input.first().json.body || $input.first().json;\nconst nombre   = (body.nombre   || '').trim();\nconst telefono = (body.telefono || '').trim();\nconst colegio  = (body.colegio  || '').trim();\nconst grado    = (body.grado    || '').trim();\n\n// Validar campos requeridos\nif (!nombre)   throw new Error('Campo requerido: nombre');\nif (!telefono) throw new Error('Campo requerido: telefono');\n\n// Extraer y codificar archivo binario\nconst item = $input.first();\nconst binaryKeys = Object.keys(item.binary || {});\n\nif (binaryKeys.length === 0) {\n  throw new Error('No se encontro archivo adjunto en la solicitud');\n}\n\nconst binaryKey    = binaryKeys[0];\nconst binaryBuffer = await this.helpers.getBinaryDataBuffer(0, binaryKey);\nconst base64Image  = binaryBuffer.toString('base64');\nconst mimeType     = item.binary[binaryKey].mimeType || 'image/jpeg';\nconst fileName     = item.binary[binaryKey].fileName  || 'lista_utiles';\n\n// imageDataUrl necesario para OpenAI Vision API\nreturn [{\n  json: {\n    cotizacion_id,\n    fecha,\n    nombre,\n    telefono,\n    colegio,\n    grado,\n    base64Image,\n    mimeType,\n    fileName,\n    imageDataUrl: `data:${mimeType};base64,${base64Image}`\n  }\n}];"
+      },
+      "id": "code-setup",
+      "name": "Setup: UUID + Imagen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.LIBRERIA_SPREADSHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "productos",
+          "mode": "name"
+        },
+        "filtersUI": {},
+        "options": {}
+      },
+      "id": "gsheets-catalogo",
+      "name": "Obtener Catalogo",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [680, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "CONFIGURAR-GOOGLE-SHEETS",
+          "name": "Google Sheets - Libreria"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================\n// PREPARAR REQUEST OPENAI VISION\n// ============================================\n\n// Recuperar datos del nodo Setup (cotización + imagen)\nconst setup = $('Setup: UUID + Imagen').first().json;\n\n// Recuperar catálogo completo desde Google Sheets\n// El input actual son los items del catálogo\nconst catalogoItems = $input.all();\nconst productosNormalizados = [\n  ...new Set(\n    catalogoItems\n      .map(item => (item.json.producto_normalizado || '').trim())\n      .filter(v => v !== '')\n  )\n].sort();\n\nif (productosNormalizados.length === 0) {\n  throw new Error('El catalogo de productos esta vacio. Verifica la Sheet \"productos\".');\n}\n\n// Construir prompt con lista de productos autorizada\nconst listaProductos = JSON.stringify(productosNormalizados, null, 2);\n\nconst prompt = `Eres un asistente especializado en identificar utiles escolares en listas de utiles peruanas.\\n\\nExtrae unicamente los utiles escolares listados en el documento adjunto.\\nSolo puedes devolver productos que existan EXACTAMENTE en esta lista autorizada:\\n\\n{{LISTA_PRODUCTOS}}\\n\\nREGLAS ESTRICTAS:\\n1. Usa EXACTAMENTE el codigo de la lista autorizada (sin modificar)\\n2. Si un producto no esta en la lista, omitelo completamente\\n3. Extrae la cantidad indicada; si no hay cantidad, usa 1\\n4. No inventes productos ni variaciones\\n5. No agregues texto, explicaciones ni markdown\\n\\nDevuelve UNICAMENTE este JSON (sin codigo fence, sin texto adicional):\\n[\\n  { \"producto\": \"codigo_exacto\", \"cantidad\": 1 }\\n]`\n  .replace('{{LISTA_PRODUCTOS}}', listaProductos);\n\n// Construir request body para OpenAI Vision API\nconst requestBody = {\n  model: 'gpt-4o',\n  max_tokens: 2000,\n  temperature: 0,\n  messages: [{\n    role: 'user',\n    content: [\n      {\n        type: 'text',\n        text: prompt\n      },\n      {\n        type: 'image_url',\n        image_url: {\n          url: setup.imageDataUrl,\n          detail: 'high'\n        }\n      }\n    ]\n  }]\n};\n\nreturn [{\n  json: {\n    ...setup,\n    requestBody\n  }\n}];"
+      },
+      "id": "code-prep-openai",
+      "name": "Preparar Request OpenAI",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.requestBody }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "http-openai",
+      "name": "OpenAI Vision API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1120, 300],
+      "credentials": {
+        "openAiApi": {
+          "id": "SeCPLJI4mV6p2hJR",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================\n// PARSEAR RESPUESTA OPENAI + CALCULAR TOTALES\n// ============================================\n\n// 1. Respuesta cruda de OpenAI\nconst openaiResp = $input.first().json;\nconst rawContent = openaiResp.choices?.[0]?.message?.content || '';\n\n// 2. Datos originales del cliente (desde nodo Setup)\nconst setup = $('Setup: UUID + Imagen').first().json;\n\n// 3. Catálogo completo de productos (desde Google Sheets)\nconst catalogoItems = $('Obtener Catalogo').all();\n\n// Construir mapa de precios: { \"codigo\": { \"marca\": 5.50, \"economico\": 3.20 } }\nconst precioMap = {};\nfor (const item of catalogoItems) {\n  const p      = item.json;\n  const codigo = (p.producto_normalizado || '').trim();\n  const tipo   = (p.tipo || '').trim().toLowerCase();\n  const precio = parseFloat(p.precio) || 0;\n\n  if (!codigo || !tipo || precio <= 0) continue;\n\n  if (!precioMap[codigo]) precioMap[codigo] = {};\n  precioMap[codigo][tipo] = precio;\n}\n\n// 4. Parsear JSON devuelto por OpenAI\nlet productosDetectados = [];\ntry {\n  // Limpiar posibles code fences de markdown\n  const cleaned = rawContent\n    .replace(/```json\\s*/gi, '')\n    .replace(/```\\s*/gi, '')\n    .trim();\n  const parsed = JSON.parse(cleaned);\n  if (Array.isArray(parsed)) productosDetectados = parsed;\n} catch (e) {\n  // Parse fallido -> array vacío, no rompe el flujo\n  productosDetectados = [];\n}\n\n// 5. Calcular totales cruzando con el catálogo\nlet total_marca     = 0;\nlet total_economico = 0;\nconst productos_cotizados     = [];\nconst productos_no_encontrados = [];\n\nfor (const det of productosDetectados) {\n  const codigo   = (det.producto || '').trim();\n  const cantidad = Math.max(1, parseInt(det.cantidad) || 1);\n\n  if (!codigo) continue;\n\n  const precios = precioMap[codigo];\n  if (!precios) {\n    // Producto detectado por IA pero no existe en catálogo -> ignorar\n    productos_no_encontrados.push(codigo);\n    continue;\n  }\n\n  const precio_marca     = precios['marca']     || 0;\n  const precio_economico = precios['economico'] || 0;\n\n  // Validar que AMBOS precios existan y sean > 0\n  if (precio_marca <= 0 || precio_economico <= 0) {\n    productos_no_encontrados.push(`${codigo} (precio incompleto)`);\n    continue;\n  }\n\n  const sub_marca     = Math.round(precio_marca     * cantidad * 100) / 100;\n  const sub_economico = Math.round(precio_economico * cantidad * 100) / 100;\n\n  total_marca     += sub_marca;\n  total_economico += sub_economico;\n\n  productos_cotizados.push({\n    producto:          codigo,\n    cantidad,\n    precio_marca,\n    precio_economico,\n    subtotal_marca:     sub_marca,\n    subtotal_economico: sub_economico\n  });\n}\n\n// Redondear totales finales\ntotal_marca     = Math.round(total_marca     * 100) / 100;\ntotal_economico = Math.round(total_economico * 100) / 100;\n\nreturn [{\n  json: {\n    cotizacion_id:          setup.cotizacion_id,\n    fecha:                  setup.fecha,\n    nombre:                 setup.nombre,\n    telefono:               setup.telefono,\n    colegio:                setup.colegio,\n    grado:                  setup.grado,\n    total_marca,\n    total_economico,\n    productos_cotizados,\n    productos_no_encontrados,\n    num_productos:          productos_cotizados.length,\n    tiene_productos:        productos_cotizados.length > 0,\n    estado:                 'cotizado'\n  }\n}];"
+      },
+      "id": "code-parsear",
+      "name": "Parsear + Calcular Totales",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-productos",
+              "leftValue": "={{ $json.num_productos }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-productos",
+      "name": "¿Hay Productos Válidos?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1560, 300]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.LIBRERIA_SPREADSHEET_ID }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "cotizaciones",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "cotizacion_id":    "={{ $json.cotizacion_id }}",
+            "fecha":            "={{ $json.fecha }}",
+            "nombre":           "={{ $json.nombre }}",
+            "telefono":         "={{ $json.telefono }}",
+            "colegio":          "={{ $json.colegio }}",
+            "grado":            "={{ $json.grado }}",
+            "total_marca":      "={{ $json.total_marca }}",
+            "total_economico":  "={{ $json.total_economico }}",
+            "estado":           "={{ $json.estado }}"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "gsheets-guardar",
+      "name": "Guardar Cotizacion",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [1780, 160],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "CONFIGURAR-GOOGLE-SHEETS",
+          "name": "Google Sheets - Libreria"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================\n// PREPARAR MENSAJES TELEGRAM (LEADS + ADMIN)\n// ============================================\nconst d = $input.first().json;\n\n// Lista de productos para ADMIN\nconst listaProductos = d.productos_cotizados\n  .map(p =>\n    `  • *${p.producto}* ×${p.cantidad}` +\n    ` → Marca: S/${p.subtotal_marca.toFixed(2)}` +\n    ` / Eco: S/${p.subtotal_economico.toFixed(2)}`\n  )\n  .join('\\n') || '  (Sin productos válidos identificados)';\n\nconst noEncontrados = d.productos_no_encontrados.length > 0\n  ? '\\n⚠️ _No encontrados_: ' +\n    d.productos_no_encontrados.slice(0, 5).join(', ') +\n    (d.productos_no_encontrados.length > 5 ? '...' : '')\n  : '';\n\n// === Mensaje LEADS: resumen simple ===\nconst msg_leads = [\n  '🆕 *Nueva Cotización*',\n  '🆔 `' + d.cotizacion_id.slice(0, 8) + '...`',\n  '👤 ' + d.nombre + ' | 📞 ' + d.telefono,\n  '🏫 ' + (d.colegio || 'N/A') + ' — ' + (d.grado || 'N/A'),\n  '💰 Marca: *S/ ' + d.total_marca.toFixed(2) + '*',\n  '💰 Económica: *S/ ' + d.total_economico.toFixed(2) + '*',\n  '📦 ' + d.num_productos + ' producto(s)'\n].join('\\n');\n\n// === Mensaje ADMIN: detalle completo ===\nconst msg_admin = [\n  '📋 *NUEVA COTIZACIÓN — Detalle Completo*',\n  '━━━━━━━━━━━━━━━━━━━',\n  '🆔 `' + d.cotizacion_id + '`',\n  '📅 ' + new Date(d.fecha).toLocaleString('es-PE', { timeZone: 'America/Lima' }),\n  '━━━━━━━━━━━━━━━━━━━',\n  '👤 ' + d.nombre,\n  '📞 ' + d.telefono,\n  '🏫 ' + (d.colegio || 'N/A') + ' — ' + (d.grado || 'N/A'),\n  '━━━━━━━━━━━━━━━━━━━',\n  '📦 *Productos (' + d.num_productos + '):*',\n  listaProductos,\n  noEncontrados,\n  '━━━━━━━━━━━━━━━━━━━',\n  '💰 *Total Marca: S/ ' + d.total_marca.toFixed(2) + '*',\n  '💰 *Total Económica: S/ ' + d.total_economico.toFixed(2) + '*'\n].filter(Boolean).join('\\n');\n\nreturn [{\n  json: {\n    ...d,\n    msg_leads,\n    msg_admin\n  }\n}];"
+      },
+      "id": "code-mensajes",
+      "name": "Preparar Mensajes Telegram",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2000, 160]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $env.TELEGRAM_CHAT_LEADS }}",
+        "text": "={{ $json.msg_leads }}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "tg-leads",
+      "name": "Telegram LEADS",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [2220, 160],
+      "continueOnFail": true,
+      "credentials": {
+        "telegramApi": {
+          "id": "CONFIGURAR-TELEGRAM",
+          "name": "Telegram Bot - Libreria"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $env.TELEGRAM_CHAT_ADMIN }}",
+        "text": "={{ $('Preparar Mensajes Telegram').first().json.msg_admin }}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "tg-admin",
+      "name": "Telegram ADMIN",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [2440, 160],
+      "continueOnFail": true,
+      "credentials": {
+        "telegramApi": {
+          "id": "CONFIGURAR-TELEGRAM",
+          "name": "Telegram Bot - Libreria"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ cotizacion_id: $('Parsear + Calcular Totales').first().json.cotizacion_id, total_marca: $('Parsear + Calcular Totales').first().json.total_marca, total_economico: $('Parsear + Calcular Totales').first().json.total_economico, num_productos: $('Parsear + Calcular Totales').first().json.num_productos, estado: 'cotizado' }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "respond-ok",
+      "name": "Respuesta Exitosa",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2660, 160]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ error: true, codigo: 'SIN_PRODUCTOS', mensaje: 'No se identificaron productos válidos en el documento. Verifica que la imagen sea clara y corresponda a una lista de útiles escolares.', cotizacion_id: $json.cotizacion_id || null }) }}",
+        "options": {
+          "responseCode": 422
+        }
+      },
+      "id": "respond-error",
+      "name": "Error Sin Productos",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1780, 440]
+    }
+  ],
+  "connections": {
+    "Webhook Cotizacion": {
+      "main": [
+        [
+          {
+            "node": "Setup: UUID + Imagen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Setup: UUID + Imagen": {
+      "main": [
+        [
+          {
+            "node": "Obtener Catalogo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Obtener Catalogo": {
+      "main": [
+        [
+          {
+            "node": "Preparar Request OpenAI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Request OpenAI": {
+      "main": [
+        [
+          {
+            "node": "OpenAI Vision API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Vision API": {
+      "main": [
+        [
+          {
+            "node": "Parsear + Calcular Totales",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parsear + Calcular Totales": {
+      "main": [
+        [
+          {
+            "node": "¿Hay Productos Válidos?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Hay Productos Válidos?": {
+      "main": [
+        [
+          {
+            "node": "Guardar Cotizacion",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error Sin Productos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar Cotizacion": {
+      "main": [
+        [
+          {
+            "node": "Preparar Mensajes Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Mensajes Telegram": {
+      "main": [
+        [
+          {
+            "node": "Telegram LEADS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram LEADS": {
+      "main": [
+        [
+          {
+            "node": "Telegram ADMIN",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram ADMIN": {
+      "main": [
+        [
+          {
+            "node": "Respuesta Exitosa",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "id": "libreria-w1-cotizacion",
+  "tags": [
+    { "name": "libreria" },
+    { "name": "cotizacion" }
+  ]
+}

@@ -1,0 +1,224 @@
+# ============================================================
+# SofIA SaaS — n8n Queue Mode (40+ clínicas)
+# ============================================================
+#
+# CUÁNDO ACTIVAR QUEUE MODE:
+#   - Cuando tienes > 20 clínicas activas simultáneas
+#   - Cuando las ejecuciones concurrentes superan 10
+#   - Cuando necesitas zero-downtime en deploys de workers
+#   - SIEMPRE en producción real con datos de pacientes
+#
+# ARQUITECTURA:
+#   [Webhook] → [n8n Main] → [Redis Queue] → [Worker 1]
+#                                          → [Worker 2]
+#                                          → [Worker 3]
+#
+# USO:
+#   docker-compose -f docker-compose.queue.yml up -d
+#   docker-compose -f docker-compose.queue.yml scale n8n-worker=5
+#
+# REQUISITOS:
+#   Copiar y renombrar: .env.queue.example → .env.queue
+#   Completar todas las variables
+# ============================================================
+
+version: '3.8'
+
+services:
+
+  # ──────────────────────────────────────────────
+  # REDIS: Cola de ejecuciones + Cache de sesiones
+  # ──────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: sofia-redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD}
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --save 60 100
+      --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - sofia-internal
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 600M
+
+  # ──────────────────────────────────────────────
+  # N8N MAIN: UI + Webhook receiver (NO ejecuta workflows)
+  # Puerto 5678 expuesto via Nginx
+  # ──────────────────────────────────────────────
+  n8n-main:
+    image: n8nio/n8n:${N8N_VERSION:-latest}
+    container_name: sofia-n8n-main
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      # ── Modo Queue ──
+      EXECUTIONS_MODE: queue
+      QUEUE_BULL_REDIS_HOST: redis
+      QUEUE_BULL_REDIS_PORT: 6379
+      QUEUE_BULL_REDIS_PASSWORD: ${REDIS_PASSWORD}
+      QUEUE_BULL_REDIS_DB: 0
+      QUEUE_BULL_REDIS_TIMEOUT_THRESHOLD: 10000
+
+      # ── Base de datos n8n (PostgreSQL recomendado para producción) ──
+      DB_TYPE: ${N8N_DB_TYPE:-sqlite}           # cambiar a 'postgresdb' para producción
+      DB_POSTGRESDB_HOST: ${N8N_PGHOST:-}
+      DB_POSTGRESDB_PORT: ${N8N_PGPORT:-5432}
+      DB_POSTGRESDB_DATABASE: ${N8N_PGDB:-n8n}
+      DB_POSTGRESDB_USER: ${N8N_PGUSER:-}
+      DB_POSTGRESDB_PASSWORD: ${N8N_PGPASSWORD:-}
+
+      # ── Configuración general ──
+      N8N_HOST: ${N8N_HOST:-0.0.0.0}
+      N8N_PORT: 5678
+      N8N_PROTOCOL: ${N8N_PROTOCOL:-https}
+      WEBHOOK_URL: ${N8N_WEBHOOK_URL}           # URL pública del webhook
+      N8N_EDITOR_BASE_URL: ${N8N_EDITOR_URL}
+
+      # ── Seguridad ──
+      N8N_BASIC_AUTH_ACTIVE: "true"
+      N8N_BASIC_AUTH_USER: ${N8N_ADMIN_USER}
+      N8N_BASIC_AUTH_PASSWORD: ${N8N_ADMIN_PASSWORD}
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}  # openssl rand -hex 32
+
+      # ── SofIA variables (usadas por Code nodes) ──
+      N8N_SUPABASE_URL: ${N8N_SUPABASE_URL}
+      N8N_SUPABASE_SERVICE_KEY: ${N8N_SUPABASE_SERVICE_KEY}
+      N8N_CHATWOOT_WEBHOOK_TOKEN: ${N8N_CHATWOOT_WEBHOOK_TOKEN}
+      N8N_ALERT_WEBHOOK_URL: ${N8N_ALERT_WEBHOOK_URL}
+      N8N_WEBHOOK_MAX_AGE_SECONDS: 300
+
+      # ── Ejecuciones ──
+      EXECUTIONS_DATA_PRUNE: "true"
+      EXECUTIONS_DATA_MAX_AGE: 168           # 7 días en horas
+      EXECUTIONS_DATA_PRUNE_TIMEOUT: 3600    # Purga cada hora
+
+      # ── Logging ──
+      N8N_LOG_LEVEL: warn
+      N8N_LOG_OUTPUT: console
+
+    volumes:
+      - n8n_data:/home/node/.n8n
+    ports:
+      - "127.0.0.1:5678:5678"   # Solo accesible via Nginx (no expuesto directamente)
+    networks:
+      - sofia-internal
+      - sofia-external
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:5678/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ──────────────────────────────────────────────
+  # N8N WORKER: Ejecuta workflows (sin UI)
+  # Escalar horizontalmente: docker-compose scale n8n-worker=5
+  # ──────────────────────────────────────────────
+  n8n-worker:
+    image: n8nio/n8n:${N8N_VERSION:-latest}
+    container_name: sofia-n8n-worker  # Se renombra automáticamente en scale
+    restart: unless-stopped
+    command: worker
+    depends_on:
+      redis:
+        condition: service_healthy
+      n8n-main:
+        condition: service_healthy
+    environment:
+      # ── Modo Queue (idéntico al main) ──
+      EXECUTIONS_MODE: queue
+      QUEUE_BULL_REDIS_HOST: redis
+      QUEUE_BULL_REDIS_PORT: 6379
+      QUEUE_BULL_REDIS_PASSWORD: ${REDIS_PASSWORD}
+      QUEUE_BULL_REDIS_DB: 0
+
+      # ── Concurrencia por worker ──
+      # 40 clínicas × 12 msg/hora pico = 480/hora = 0.13/seg
+      # Con 10s por ejecución: ~1.3 concurrentes promedio, 22 pico extremo
+      # 3 workers × 10 concurrentes = 30 total > 22 → suficiente
+      N8N_CONCURRENCY_PRODUCTION_LIMIT: 10
+
+      # ── Base de datos (misma que main) ──
+      DB_TYPE: ${N8N_DB_TYPE:-sqlite}
+      DB_POSTGRESDB_HOST: ${N8N_PGHOST:-}
+      DB_POSTGRESDB_PORT: ${N8N_PGPORT:-5432}
+      DB_POSTGRESDB_DATABASE: ${N8N_PGDB:-n8n}
+      DB_POSTGRESDB_USER: ${N8N_PGUSER:-}
+      DB_POSTGRESDB_PASSWORD: ${N8N_PGPASSWORD:-}
+
+      # ── Encriptación (MISMO KEY que main — obligatorio) ──
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+
+      # ── SofIA variables ──
+      N8N_SUPABASE_URL: ${N8N_SUPABASE_URL}
+      N8N_SUPABASE_SERVICE_KEY: ${N8N_SUPABASE_SERVICE_KEY}
+      N8N_CHATWOOT_WEBHOOK_TOKEN: ${N8N_CHATWOOT_WEBHOOK_TOKEN}
+      N8N_ALERT_WEBHOOK_URL: ${N8N_ALERT_WEBHOOK_URL}
+      N8N_WEBHOOK_MAX_AGE_SECONDS: 300
+
+      N8N_LOG_LEVEL: warn
+
+    volumes:
+      - n8n_data:/home/node/.n8n  # Compartido con main (credentials, workflows)
+    networks:
+      - sofia-internal
+    deploy:
+      replicas: 3                   # 3 workers por defecto para 40 clínicas
+      resources:
+        limits:
+          memory: 1G                # Cada worker máx 1GB RAM
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+
+  # ──────────────────────────────────────────────
+  # NGINX: Rate limiting + SSL termination
+  # ──────────────────────────────────────────────
+  nginx:
+    image: nginx:alpine
+    container_name: sofia-nginx
+    restart: unless-stopped
+    depends_on:
+      n8n-main:
+        condition: service_healthy
+    volumes:
+      - ./nginx_sofia.conf:/etc/nginx/conf.d/default.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro   # Certs via certbot
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - sofia-external
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 5s
+
+volumes:
+  redis_data:     # Persistencia de la cola (crítico — no perder jobs)
+  n8n_data:       # Workflows, credentials, executions
+
+networks:
+  sofia-internal:   # Redis + n8n main + workers (no expuesto)
+    driver: bridge
+  sofia-external:   # Nginx → n8n main (expuesto)
+    driver: bridge

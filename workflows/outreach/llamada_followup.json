@@ -97,7 +97,7 @@
             },
             {
               "name": "Twiml",
-              "value": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response><Say voice=\"Polly.Mia-Neural\">Hola, buenos dias. Llamamos de parte de SofIA, el asistente inteligente para clinicas dentales en Lima. Le escribimos hace unos dias sobre como automatizar la agenda de citas por WhatsApp. Si le interesa una demostracion gratuita, por favor responda el mensaje de texto que le enviamos. Muchas gracias y hasta luego.</Say></Response>"
+              "value": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response><Say voice=\"Polly.Mia-Neural\" language=\"es-US\">Hola, buen dia. Le llamo de parte de SofIA, el asistente de inteligencia artificial para clinicas dentales en Lima.<break time=\"500ms\"/>Nos comunicamos porque le escribimos hace unos dias sobre como sus pacientes pueden agendar citas directamente por WhatsApp, las 24 horas, los 7 dias de la semana, sin que su equipo tenga que responder manualmente.<break time=\"400ms\"/>Ademas, SofIA envia recordatorios automaticos que reducen las cancelaciones hasta un 40 por ciento.<break time=\"500ms\"/>Si le interesa ver una demostracion gratuita de 15 minutos esta semana, por favor responda el mensaje de texto que le enviamos, o escribanos al mismo numero.<break time=\"400ms\"/>Muchas gracias por su tiempo. Que tenga un excelente dia.</Say></Response>"
             }
           ]
         },

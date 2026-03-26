@@ -14,7 +14,7 @@ const WF_ID   = '8mglaD5SCaFB2XWZ';
 const BASE    = 'workflows.n8n.redsolucionesti.com';
 const AT_BASE  = 'app6a4u9dvXMxwOnY';
 const AT_TABLE = 'tblBuVcKITk5GFoqk';
-const AT_PAT   = 'pat5sJm0yS44SFj32.d405758758dca807b0b6dd628dffa64a99f50148c3cfad6cc1b5efca6af832ef';
+const AT_PAT   = 'pat5sJm0yS44SFj32.9f23ae38720ff5c2a5445514954360fc496e86e60125b738d4807515691a1dfa';
 const OPENAI_CRED = { id: 'SeCPLJI4mV6p2hJR', name: 'OpenAi account' };
 const WA_LINK = 'https://wa.me/51905858566?text=Hola%20Gabriel%2C%20vi%20tu%20email%20sobre%20SofIA%20y%20quisiera%20saber%20m%C3%A1s';
 

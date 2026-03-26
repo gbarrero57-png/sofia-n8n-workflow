@@ -19,7 +19,7 @@ const fs = require('fs');
 const N8N_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkMDU3OGJmNy1lYWJjLTRkNDItOGI4My0wNjdlMGIzM2I3MGMiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwiaWF0IjoxNzczMjA3MjI4fQ.Wgu55pt4WNoHs9vkxsndOsxi9gOC9JglBcGPMsjEF-Q';
 const WF_ID = 'uYIrhVx6RroPejWw';
 const BASE = 'workflows.n8n.redsolucionesti.com';
-const GOOGLE_KEY = 'AIzaSyBsEMSSh7mPsVFYjCOkhnT3tcqtnpDtI8I';
+const GOOGLE_KEY = 'AIzaSyD8mGSMUhdPiGclqIffftWq9aeMQVKQ6Co';
 
 function apiGet(path) {
   return new Promise((res, rej) => {

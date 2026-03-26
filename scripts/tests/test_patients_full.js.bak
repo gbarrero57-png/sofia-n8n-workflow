@@ -6,7 +6,7 @@
 const https = require('https');
 
 const SUPABASE_URL     = process.env.SUPABASE_URL     || 'https://inhyrrjidhzrbqecnptn.supabase.co';
-const SERVICE_KEY      = process.env.SUPABASE_SERVICE_KEY;
+const SERVICE_KEY      = process.env.SUPABASE_SERVICE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImluaHlycmppZGh6cmJxZWNucHRuIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MTAwNzU3NSwiZXhwIjoyMDg2NTgzNTc1fQ.-YwX0Qf4Gn8MdjFbLxCYuCJV1OzWl2qWWk4hKuU6z7k';
 const CLINIC_ID        = process.env.CLINIC_ID        || '56b0cf1c-2ab6-4e03-b989-044701e47271';
 const ADMIN_USER_ID    = process.env.ADMIN_USER_ID    || '88c478fc-1733-4184-a912-955e67794031';
 const PORTAL_URL       = process.env.PORTAL_URL       || 'sofia.redsolucionesti.com';

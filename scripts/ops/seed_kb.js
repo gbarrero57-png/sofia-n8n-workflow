@@ -2,7 +2,7 @@
 const https = require('https');
 
 const SUPABASE_URL = 'inhyrrjidhzrbqecnptn.supabase.co';
-const SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImluaHlycmppZGh6cmJxZWNucHRuIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MTAwNzU3NSwiZXhwIjoyMDg2NTgzNTc1fQ.-YwX0Qf4Gn8MdjFbLxCYuCJV1OzWl2qWWk4hKuU6z7k';
+const SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
 const ODONTOVIDA_ID = 'f8e7d6c5-b4a3-9281-0fed-cba987654321';
 const DEMO_ID = 'c6c15fca-d7fc-4d98-83c1-2c5cb5a6bef1';

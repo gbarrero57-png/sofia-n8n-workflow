@@ -1,0 +1,211 @@
+{
+  "name": "SofIA Content Generator",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "trigger-manual",
+      "name": "Generar Contenido",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [200, 400]
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": { "__rl": true, "value": "app6a4u9dvXMxwOnY", "mode": "id" },
+        "table": { "__rl": true, "value": "tbljk5PkSIGR87CxA", "mode": "id" },
+        "filterByFormula": "={status}='Pendiente'",
+        "options": { "sort": [{ "field": "day", "direction": "asc" }] }
+      },
+      "id": "airtable-get-pending",
+      "name": "Airtable - Posts Pendientes",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [420, 400],
+      "credentials": { "airtableTokenApi": { "id": "YmCX94YiEOb7UtNi", "name": "Airtable Personal Access Token account" } }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [{ "id": "check-items", "leftValue": "={{ $input.all().length }}", "rightValue": 0, "operator": { "type": "number", "operation": "gt" } }],
+          "combinator": "and"
+        }
+      },
+      "id": "if-hay-posts",
+      "name": "¿Hay posts pendientes?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [640, 400]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $vars.TELEGRAM_CHAT_ID || '-1001234567890' }}",
+        "text": "ℹ️ SofIA Content Generator\\n\\nNo hay posts pendientes en el calendario.",
+        "additionalFields": {}
+      },
+      "id": "telegram-nada",
+      "name": "Telegram - Sin Posts",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [860, 560],
+      "credentials": { "telegramApi": { "id": "cSaxAEvIePNLpINc", "name": "Telegram account" } }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "loop-posts",
+      "name": "Loop Posts",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [860, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================\n// BUILD PLACID PAYLOAD — SofIA Content Generator\n// ============================================\n\nconst TEMPLATE_UUIDS = {\n  'carousel-slide':   'gq06s1szmh7w0',\n  'linkedin-banner':  'qj1ldvpoy3fos',\n  'ig-carrusel':      'lf7cxdnzrziuh',\n  'comparativa':      'aagzm0th6ub1a',\n  'testimonial':      'lw7e1bby8zz0x'\n};\n\nconst PLACID_TOKEN = 'placid-tjyfszkjr9kqyfct-ybqrbhowrx2ct9tx';\n\nconst record = $input.first().json;\nconst fields = record.fields || record; // Airtable v2 wraps in .fields\n\nconst template = fields.template || 'carousel-slide';\nconst template_uuid = TEMPLATE_UUIDS[template] || TEMPLATE_UUIDS['carousel-slide'];\n\nconst slideTotal = fields.slide_total || 1;\nconst slideNum   = fields.slide_num   || 1;\n\n// Build layers based on template type\nlet layers = {};\n\nif (template === 'carousel-slide') {\n  layers = {\n    title:            { text: fields.title || '' },\n    subtitle:         { text: fields.subtitle || '' },\n    slide_number:     { text: String(slideNum).padStart(2,'0') },\n    highlight_number: { text: fields.stat_number || '' }\n  };\n}\nelse if (template === 'linkedin-banner') {\n  layers = {\n    stat_number: { text: fields.stat_number || '' },\n    stat_label:  { text: fields.stat_label  || '' },\n    title:       { text: fields.title       || '' }\n  };\n}\nelse if (template === 'ig-carrusel') {\n  layers = {\n    title:        { text: fields.title    || '' },\n    body:         { text: fields.body     || '' },\n    slide_number: { text: slideNum + ' / ' + slideTotal },\n    cta:          { text: slideNum === slideTotal ? (fields.cta || 'Escríbenos →') : '' }\n  };\n}\nelse if (template === 'comparativa') {\n  layers = {\n    title:     { text: fields.title    || '' },\n    subtitle:  { text: fields.subtitle || '' }\n  };\n}\nelse if (template === 'testimonial') {\n  layers = {\n    quote:  { text: fields.body   || '' },\n    name:   { text: fields.title  || '' },\n    role:   { text: fields.subtitle || '' }\n  };\n}\n\nreturn [{\n  json: {\n    record_id:     record.id,\n    template_uuid,\n    template,\n    placid_layers: layers,\n    placid_token:  PLACID_TOKEN,\n    fields\n  }\n}];"
+      },
+      "id": "build-payload",
+      "name": "Build Placid Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1080, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.placid.app/api/rest/images",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $json.placid_token }}" },
+            { "name": "Content-Type",  "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ template_uuid: $json.template_uuid, layers: $json.placid_layers }) }}",
+        "options": {}
+      },
+      "id": "placid-generate",
+      "name": "Placid - Generar Imagen",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1300, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst prev     = $node['Build Placid Payload'].json;\n\nreturn [{\n  json: {\n    ...prev,\n    placid_image_id:  response.id,\n    placid_image_url: response.image_url || null,\n    placid_status:    response.status || 'queued'\n  }\n}];"
+      },
+      "id": "extract-placid-id",
+      "name": "Extraer ID Imagen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1520, 300]
+    },
+    {
+      "parameters": { "amount": 4, "unit": "seconds" },
+      "id": "wait-placid",
+      "name": "Esperar 4s",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [1740, 300],
+      "webhookId": "wait-placid-content"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.placid.app/api/rest/images/{{ $json.placid_image_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $json.placid_token }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "placid-poll",
+      "name": "Placid - Check Estado",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1960, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const status_res = $input.first().json;\nconst prev       = $node['Extraer ID Imagen'].json;\n\nconst image_url = status_res.image_url || status_res.url || null;\nconst status    = status_res.status || 'queued';\n\nreturn [{\n  json: {\n    ...prev,\n    image_url,\n    placid_status: status,\n    ready: (status === 'finished' || status === 'completed' || !!image_url)\n  }\n}];"
+      },
+      "id": "check-ready",
+      "name": "¿Imagen Lista?",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2180, 300]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": { "__rl": true, "value": "app6a4u9dvXMxwOnY", "mode": "id" },
+        "table": { "__rl": true, "value": "tbljk5PkSIGR87CxA", "mode": "id" },
+        "id": "={{ $json.record_id }}",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "status":    "Generado",
+            "image_url": "={{ $json.image_url || 'pendiente-diseño-placid' }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "airtable-update",
+      "name": "Airtable - Marcar Generado",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [2400, 300],
+      "credentials": { "airtableTokenApi": { "id": "YmCX94YiEOb7UtNi", "name": "Airtable Personal Access Token account" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Count generated items\nconst items = $input.all();\nreturn [{ json: { generated_count: items.length } }];"
+      },
+      "id": "count-generated",
+      "name": "Contar Generados",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2620, 300]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $vars.TELEGRAM_CHAT_ID || '-1001234567890' }}",
+        "text": "=✅ *SofIA Content Generator*\\n\\n🎨 {{ $json.generated_count }} imágenes generadas\\n\\nRevisa Airtable para ver los links de descarga:\\nhttps://airtable.com/app6a4u9dvXMxwOnY/tbljk5PkSIGR87CxA",
+        "additionalFields": { "parse_mode": "Markdown" }
+      },
+      "id": "telegram-done",
+      "name": "Telegram - Listo",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [2840, 300],
+      "credentials": { "telegramApi": { "id": "cSaxAEvIePNLpINc", "name": "Telegram account" } }
+    }
+  ],
+  "connections": {
+    "Generar Contenido": { "main": [[{ "node": "Airtable - Posts Pendientes", "type": "main", "index": 0 }]] },
+    "Airtable - Posts Pendientes": { "main": [[{ "node": "¿Hay posts pendientes?", "type": "main", "index": 0 }]] },
+    "¿Hay posts pendientes?": {
+      "main": [
+        [{ "node": "Loop Posts", "type": "main", "index": 0 }],
+        [{ "node": "Telegram - Sin Posts", "type": "main", "index": 0 }]
+      ]
+    },
+    "Loop Posts": { "main": [[{ "node": "Build Placid Payload", "type": "main", "index": 0 }]] },
+    "Build Placid Payload": { "main": [[{ "node": "Placid - Generar Imagen", "type": "main", "index": 0 }]] },
+    "Placid - Generar Imagen": { "main": [[{ "node": "Extraer ID Imagen", "type": "main", "index": 0 }]] },
+    "Extraer ID Imagen": { "main": [[{ "node": "Esperar 4s", "type": "main", "index": 0 }]] },
+    "Esperar 4s": { "main": [[{ "node": "Placid - Check Estado", "type": "main", "index": 0 }]] },
+    "Placid - Check Estado": { "main": [[{ "node": "¿Imagen Lista?", "type": "main", "index": 0 }]] },
+    "¿Imagen Lista?": { "main": [[{ "node": "Airtable - Marcar Generado", "type": "main", "index": 0 }]] },
+    "Airtable - Marcar Generado": { "main": [[{ "node": "Contar Generados", "type": "main", "index": 0 }]] },
+    "Contar Generados": { "main": [[{ "node": "Telegram - Listo", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "staticData": null,
+  "tags": []
+}

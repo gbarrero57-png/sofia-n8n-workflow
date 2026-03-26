@@ -6,7 +6,7 @@ const fs    = require('fs');
 const path  = require('path');
 
 const HOST        = 'inhyrrjidhzrbqecnptn.supabase.co';
-const SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImluaHlycmppZGh6cmJxZWNucHRuIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MTAwNzU3NSwiZXhwIjoyMDg2NTgzNTc1fQ.-YwX0Qf4Gn8MdjFbLxCYuCJV1OzWl2qWWk4hKuU6z7k';
+const SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const MIGRATIONS  = path.join(__dirname, '../../supabase/migrations');
 
 function runSQL(sql) {

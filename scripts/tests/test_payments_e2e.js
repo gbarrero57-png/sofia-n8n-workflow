@@ -1,7 +1,7 @@
 // test_payments_e2e.js — E2E test de gestión de pagos por clínica
 // Prueba: columnas, CRUD payment_status, filtros, RPC reminders
 const SB  = 'https://inhyrrjidhzrbqecnptn.supabase.co';
-const SK  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImluaHlycmppZGh6cmJxZWNucHRuIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MTAwNzU3NSwiZXhwIjoyMDg2NTgzNTc1fQ.-YwX0Qf4Gn8MdjFbLxCYuCJV1OzWl2qWWk4hKuU6z7k';
+const SK  = process.env.SUPABASE_SERVICE_KEY;
 const H   = { 'apikey': SK, 'Authorization': 'Bearer ' + SK, 'Content-Type': 'application/json', 'Prefer': 'return=representation' };
 
 const CLINICAS = [

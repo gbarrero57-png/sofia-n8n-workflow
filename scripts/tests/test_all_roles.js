@@ -15,7 +15,7 @@
  */
 
 const SUPABASE_URL = 'https://inhyrrjidhzrbqecnptn.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImluaHlycmppZGh6cmJxZWNucHRuIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MTAwNzU3NSwiZXhwIjoyMDg2NTgzNTc1fQ.-YwX0Qf4Gn8MdjFbLxCYuCJV1OzWl2qWWk4hKuU6z7k';
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const PANEL_URL   = 'https://sofia-admin-theta.vercel.app';
 const CLINIC1_ID  = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
 const CLINIC2_ID  = '56b0cf1c-2ab6-4e03-b989-044701e47271'; // San Marcos

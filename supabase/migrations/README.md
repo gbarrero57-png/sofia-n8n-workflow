@@ -31,5 +31,7 @@ Ref: `inhyrrjidhzrbqecnptn`
 | 024 | doctors_schema.sql | Tabla doctors + KB auto-sync trigger |
 | 025 | appointments_doctor.sql | FK doctor_id en appointments + EXCLUDE constraints |
 | 026 | resolve_clinic_email.sql | Agrega admin_email al retorno de resolve_clinic() |
+| 027 | patient_clinical_history.sql | clinical_events table + bot_upsert_patient + log_clinical_event + get_patient_history RPCs |
 
 > Note: Existe un gap en 014 (no aplicado) y dos archivos 013 aplicados manualmente.
+> Migration 027: **Pendiente aplicar via Supabase SQL Editor**. Ver `scripts/ops/apply_migration_027.js` para instrucciones.

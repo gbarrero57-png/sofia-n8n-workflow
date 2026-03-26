@@ -17,9 +17,10 @@ CHATWOOT_ACCOUNT_ID = 2
 CHATWOOT_API_TOKEN = "yypAwZDH2dV3crfbqJqWCgj1"
 
 # Test Data IDs (fake conversation IDs para testing)
+# Sofia Demo: account_id=2, inbox_id=10 (WhatsApp Peru)
 TEST_CONVERSATION_ID = 9001
 TEST_CONTACT_ID = 9001
-TEST_INBOX_ID = 2
+TEST_INBOX_ID = 10
 
 # Google Calendar Configuration
 CALENDAR_ID = "family00280432052323677917@group.calendar.google.com"

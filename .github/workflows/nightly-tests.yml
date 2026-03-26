@@ -23,13 +23,13 @@ jobs:
           node-version: '20'
 
       - name: Run patients / governance / portal tests
-        run: node saas/test_patients_full.js 2>&1 | tee /tmp/node_output.txt
+        run: node scripts/tests/test_patients_full.js 2>&1 | tee /tmp/node_output.txt
         continue-on-error: true
         env:
           SUPABASE_URL:         https://inhyrrjidhzrbqecnptn.supabase.co
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-          CLINIC_ID:            56b0cf1c-2ab6-4e03-b989-044701e47271
-          ADMIN_USER_ID:        88c478fc-1733-4184-a912-955e67794031
+          CLINIC_ID:            c6c15fca-d7fc-4d98-83c1-2c5cb5a6bef1
+          ADMIN_USER_ID:        36a7e2e3-6ca4-471b-9ee7-0adff03258dc
           PORTAL_URL:           sofia.redsolucionesti.com
           ADMIN_EMAIL:          ${{ secrets.SUPABASE_ADMIN_EMAIL }}
           ADMIN_PASS:           ${{ secrets.SUPABASE_ADMIN_PASS }}

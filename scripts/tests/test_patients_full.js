@@ -81,9 +81,10 @@ function test(name, fn) {
 const ok  = (info)   => ({ ok: true,  info });
 const fail = (reason) => ({ ok: false, reason });
 
-// ── Auth: get Supabase session for portal tests ──────────────────────────────
+// ── Auth: get Supabase session for RPC calls + portal session ────────────────
 
 let sbToken = null;
+let portalCookie = null;
 
 async function loginSupabase() {
   const r = await req('POST', `/auth/v1/token?grant_type=password`, {
@@ -96,9 +97,36 @@ async function loginSupabase() {
   return false;
 }
 
+async function loginPortal() {
+  const bodyStr = JSON.stringify({ email: ADMIN_EMAIL, password: ADMIN_PASS });
+  return new Promise((resolve) => {
+    const opts = {
+      hostname: PORTAL_URL,
+      path: '/api/auth/login',
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(bodyStr) },
+    };
+    const r = https.request(opts, res => {
+      let d = ''; res.on('data', c => d += c);
+      res.on('end', () => {
+        const raw = res.headers['set-cookie'];
+        if (raw) {
+          portalCookie = (Array.isArray(raw) ? raw : [raw]).map(c => c.split(';')[0]).join('; ');
+          resolve(true);
+        } else {
+          resolve(false);
+        }
+      });
+    });
+    r.on('error', () => resolve(false));
+    r.write(bodyStr);
+    r.end();
+  });
+}
+
 function portalReq(method, path, body) {
   const headers = {
-    'Cookie': `sb-token=${sbToken}`,
+    'Cookie': portalCookie || '',
     'Content-Type': 'application/json',
     'Host': PORTAL_URL,
   };
@@ -133,10 +161,15 @@ async function main() {
   console.log('━━━ 0. AUTH — Obtener sesión con custom claims ━━━━');
   const loggedIn = await loginSupabase();
   if (!loggedIn) {
-    console.log('  ❌ No se pudo autenticar — abortando tests de patients');
+    console.log('  ❌ No se pudo autenticar con Supabase — abortando');
     process.exit(1);
   }
-  console.log(`  🔑 Sesión obtenida para ${ADMIN_EMAIL}\n`);
+  console.log(`  🔑 Sesión Supabase obtenida para ${ADMIN_EMAIL}`);
+
+  const portalLoggedIn = await loginPortal();
+  console.log(portalLoggedIn
+    ? `  🌐 Sesión portal obtenida (${PORTAL_URL})\n`
+    : `  ⚠️  Portal login falló — los tests de API portal fallarán\n`);
 
   // Headers con JWT del usuario (que tiene clinic_id claim)
   const USER_HDR = {

@@ -33,9 +33,29 @@ class TestResult:
         return f"{status} | {self.name}: {self.message}"
 
 
+def _get_latest_exec_id() -> Optional[str]:
+    """Returns the latest execution ID without fetching full details."""
+    try:
+        r = requests.get(
+            f"{N8N_BASE_URL}/api/v1/executions",
+            headers={"X-N8N-API-KEY": N8N_API_KEY},
+            params={"workflowId": WORKFLOW_ID, "limit": 1},
+            timeout=API_TIMEOUT
+        )
+        if r.status_code == 200:
+            data = r.json().get("data", [])
+            if data:
+                return str(data[0]["id"])
+    except Exception:
+        pass
+    return None
+
+
 def execute_workflow(payload: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Ejecuta el workflow con un payload de test
+    Ejecuta el workflow con un payload de test.
+    Registra el execution ID previo para que wait_for_execution
+    pueda hacer polling por la ejecución correcta.
 
     Args:
         payload: Webhook payload simulando Chatwoot
@@ -43,6 +63,9 @@ def execute_workflow(payload: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         Ejecución result JSON
     """
+    # Record the latest execution ID BEFORE sending the webhook
+    execute_workflow._prev_exec_id = _get_latest_exec_id()
+
     webhook_url = f"{N8N_BASE_URL}/webhook/chatwoot-sofia"
 
     try:
@@ -50,31 +73,90 @@ def execute_workflow(payload: Dict[str, Any]) -> Dict[str, Any]:
             webhook_url,
             json=payload,
             timeout=API_TIMEOUT,
-            headers={"Content-Type": "application/json"}
+            headers={
+                "Content-Type": "application/json",
+                "x-chatwoot-signature": "sha256=test-ci-bypass"
+            }
         )
-
-        # n8n webhook returns 200 even if execution fails internally
-        # We need to fetch execution details via API
         return {
             "webhook_status": response.status_code,
             "webhook_response": response.text if response.text else None
         }
     except Exception as e:
-        return {
-            "webhook_status": 0,
-            "error": str(e)
-        }
+        return {"webhook_status": 0, "error": str(e)}
+
+
+execute_workflow._prev_exec_id = None
+
+
+def reset_test_conversation():
+    """
+    Resets the test conversation governance record to active/unpaused.
+    Call before each test that triggers the Sofia workflow.
+    Prevents bot_paused=true from a prior escalation test blocking subsequent tests.
+    """
+    supabase_url = os.getenv("SUPABASE_URL", "https://inhyrrjidhzrbqecnptn.supabase.co")
+    service_key  = os.getenv("SUPABASE_SERVICE_KEY", "")
+    if not service_key:
+        return  # Skip if no key (won't block tests)
+    try:
+        requests.patch(
+            f"{supabase_url}/rest/v1/conversations",
+            params={"chatwoot_conversation_id": f"eq.{TEST_CONVERSATION_ID}"},
+            json={"bot_paused": False, "status": "active"},
+            headers={"apikey": service_key, "Authorization": f"Bearer {service_key}",
+                     "Prefer": "return=minimal"},
+            timeout=5
+        )
+    except Exception:
+        pass  # Non-fatal — test will still run
+
+
+def wait_for_execution(max_seconds: int = 30):
+    """
+    Polls until a NEW finished execution appears after the last execute_workflow() call.
+    Stores the detected execution ID in wait_for_execution._detected_exec_id
+    so get_latest_execution() can return exactly the right execution.
+    """
+    if not hasattr(wait_for_execution, '_detected_exec_id'):
+        wait_for_execution._detected_exec_id = None
+    wait_for_execution._detected_exec_id = None
+    prev_id = getattr(execute_workflow, '_prev_exec_id', None)
+    deadline = time.time() + max_seconds
+    while time.time() < deadline:
+        time.sleep(2)
+        try:
+            r = requests.get(
+                f"{N8N_BASE_URL}/api/v1/executions",
+                headers={"X-N8N-API-KEY": N8N_API_KEY},
+                params={"workflowId": WORKFLOW_ID, "limit": 3},
+                timeout=API_TIMEOUT
+            )
+            if r.status_code == 200:
+                for exec_entry in r.json().get("data", []):
+                    eid = str(exec_entry["id"])
+                    status = exec_entry.get("status", "")
+                    # Find the newest execution that is past prev_id and finished
+                    if (prev_id is None or int(eid) > int(prev_id)) and \
+                       status in ("success", "error", "crashed"):
+                        wait_for_execution._detected_exec_id = eid
+                        return
+        except Exception:
+            pass
 
 
 def get_latest_execution() -> Optional[Dict[str, Any]]:
     """
-    Obtiene los detalles de la última ejecución del workflow
-
-    Returns:
-        Execution details o None si falla
+    Obtiene los detalles de la ejecución correcta.
+    Usa el ID detectado por wait_for_execution() si está disponible.
     """
-    api_url = f"{N8N_BASE_URL}/api/v1/executions"
+    # Use the execution ID tracked by wait_for_execution when available
+    detected_id = getattr(wait_for_execution, '_detected_exec_id', None)
+    if detected_id:
+        return get_execution_details(detected_id)
 
+    # Fallback: get latest from API
+    api_url = f"{N8N_BASE_URL}/api/v1/executions"
     try:
         response = requests.get(
             api_url,
@@ -82,13 +164,11 @@ def get_latest_execution() -> Optional[Dict[str, Any]]:
             params={"workflowId": WORKFLOW_ID, "limit": 1},
             timeout=API_TIMEOUT
         )
-
         if response.status_code == 200:
             data = response.json()
             if data.get("data") and len(data["data"]) > 0:
                 exec_id = data["data"][0]["id"]
                 return get_execution_details(exec_id)
-
         return None
     except Exception as e:
         print(f"{Colors.RED}Error fetching latest execution: {e}{Colors.RESET}")

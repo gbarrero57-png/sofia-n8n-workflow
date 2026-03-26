@@ -98,6 +98,9 @@ jobs:
           cd testing
           python3 test_runner.py --phases regression --output nightly_report.txt 2>&1 | tee python_output.txt || true
         continue-on-error: true
+        env:
+          SUPABASE_URL:         https://inhyrrjidhzrbqecnptn.supabase.co
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
 
       - name: Parse results
         id: results

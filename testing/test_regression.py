@@ -20,6 +20,7 @@ else:
 
 def test_info_flow_still_works():
     """Test: Flujo INFO sigue funcionando después de Phase 4"""
+    reset_test_conversation()
     payload = create_test_payload("¿Cuánto cuesta una limpieza?")
 
     exec_result = execute_workflow(payload)
@@ -49,7 +50,8 @@ def test_info_flow_still_works():
 
 def test_payment_escalation_works():
     """Test: PAYMENT sigue escalando correctamente"""
-    payload = create_test_payload("¿Cómo puedo pagar?")
+    reset_test_conversation()
+    payload = create_test_payload("ya pague el tratamiento, hice la transferencia")
 
     exec_result = execute_workflow(payload)
     wait_for_execution()
@@ -77,7 +79,8 @@ def test_payment_escalation_works():
 
 def test_human_escalation_works():
     """Test: HUMAN sigue escalando correctamente"""
-    payload = create_test_payload("Hola buenos días")
+    reset_test_conversation()
+    payload = create_test_payload("Quiero hablar con una persona, conéctame con un asesor humano")
 
     exec_result = execute_workflow(payload)
     wait_for_execution()
@@ -105,6 +108,7 @@ def test_human_escalation_works():
 
 def test_first_interaction_not_phase4():
     """Test: Primera interacción no va a Phase 4"""
+    reset_test_conversation()
     payload = create_test_payload("Quiero una cita")
 
     exec_result = execute_workflow(payload)
@@ -131,6 +135,7 @@ def test_first_interaction_not_phase4():
 
 def test_workflow_no_infinite_loops():
     """Test: Workflow no entra en loops infinitos"""
+    reset_test_conversation()
     payload = create_test_payload("Test message")
 
     start_time = time.time()

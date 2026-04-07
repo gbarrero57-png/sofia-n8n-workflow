@@ -96,11 +96,9 @@ def reset_test_conversation():
     Prevents bot_paused=true from a prior escalation test blocking subsequent tests.
     """
     supabase_url = os.getenv("SUPABASE_URL", "https://inhyrrjidhzrbqecnptn.supabase.co")
-    service_key  = os.getenv("SUPABASE_SERVICE_KEY", "")
-    if not service_key:
-        return  # Skip if no key (won't block tests)
+    service_key = os.getenv("SUPABASE_SERVICE_KEY", "")
     try:
-        requests.patch(
+        r = requests.patch(
             f"{supabase_url}/rest/v1/conversations",
             params={"chatwoot_conversation_id": f"eq.{TEST_CONVERSATION_ID}"},
             json={"bot_paused": False, "status": "active"},
@@ -108,8 +106,10 @@ def reset_test_conversation():
                      "Prefer": "return=minimal"},
             timeout=5
         )
-    except Exception:
-        pass  # Non-fatal — test will still run
+        if r.status_code not in (200, 204):
+            print(f"[reset_test_conversation] WARNING: status {r.status_code} — {r.text[:100]}")
+    except Exception as e:
+        print(f"[reset_test_conversation] WARNING: {e}")  # Non-fatal — test will still run
 
 
 def wait_for_execution(max_seconds: int = 30):
@@ -202,11 +202,6 @@ def get_execution_details(exec_id: str) -> Optional[Dict[str, Any]]:
     except Exception as e:
         print(f"{Colors.RED}Error fetching execution {exec_id}: {e}{Colors.RESET}")
         return None
-
-
-def wait_for_execution(seconds: int = EXECUTION_WAIT_TIME):
-    """Espera a que la ejecución se complete"""
-    time.sleep(seconds)
 
 
 def create_test_payload(

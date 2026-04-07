@@ -73,7 +73,7 @@ EXPECTED_NODES_PHASE4 = 13  # Additional nodes in Phase 4
 
 # Timeout Configuration
 API_TIMEOUT = 30  # seconds
-EXECUTION_WAIT_TIME = 5  # seconds to wait for execution to complete
+EXECUTION_WAIT_TIME = 15  # seconds to wait for execution to complete
 
 # Colors for terminal output
 class Colors:

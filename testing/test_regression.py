@@ -166,23 +166,30 @@ def run_regression_tests():
     """Ejecuta todos los regression tests"""
     print_test_header("REGRESSION TESTS")
 
+    # Pause between tests to avoid rate limit (30 req/min per clinic)
+    INTER_TEST_DELAY = 3  # seconds
+
     results = []
 
     # Test INFO flow
     print(f"\n{Colors.BLUE}Testing INFO flow regression...{Colors.RESET}")
     results.append(test_info_flow_still_works())
+    time.sleep(INTER_TEST_DELAY)
 
     # Test PAYMENT escalation
     print(f"\n{Colors.BLUE}Testing PAYMENT escalation regression...{Colors.RESET}")
     results.append(test_payment_escalation_works())
+    time.sleep(INTER_TEST_DELAY)
 
     # Test HUMAN escalation
     print(f"\n{Colors.BLUE}Testing HUMAN escalation regression...{Colors.RESET}")
     results.append(test_human_escalation_works())
+    time.sleep(INTER_TEST_DELAY)
 
     # Test first interaction
     print(f"\n{Colors.BLUE}Testing first interaction routing...{Colors.RESET}")
     results.append(test_first_interaction_not_phase4())
+    time.sleep(INTER_TEST_DELAY)
 
     # Test no infinite loops
     print(f"\n{Colors.BLUE}Testing for infinite loops...{Colors.RESET}")

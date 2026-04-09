@@ -1,13 +1,20 @@
 name: SofIA Workflow Tests
 
 on:
-  # Ejecutar en cada push a main
+  # Solo ejecutar en push que toque archivos de testing o del workflow principal
   push:
     branches: [ main, develop ]
+    paths:
+      - 'testing/**'
+      - 'workflows/sofia/sofia_main.json'
+      - '.github/workflows/test-sofia-workflow.yml'
 
-  # Ejecutar en PRs hacia main
+  # Ejecutar en PRs hacia main (solo si tocan testing o el workflow)
   pull_request:
     branches: [ main ]
+    paths:
+      - 'testing/**'
+      - 'workflows/sofia/sofia_main.json'
 
   # Permitir ejecucion manual
   workflow_dispatch:
@@ -17,14 +24,16 @@ on:
         required: false
         default: 'regression'
 
-  # Ejecutar diariamente a las 9 AM UTC
+  # Ejecutar diariamente a las 4 AM UTC (11 PM Lima — fuera de horario de pacientes)
   schedule:
-    - cron: '0 9 * * *'
+    - cron: '0 4 * * *'
 
 env:
   N8N_API_KEY: ${{ secrets.N8N_API_KEY }}
   N8N_BASE_URL: ${{ secrets.N8N_BASE_URL }}
   WORKFLOW_ID: ${{ secrets.WORKFLOW_ID }}
+  SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+  SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
 
 jobs:
   test-workflow:

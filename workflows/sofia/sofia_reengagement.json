@@ -1,0 +1,166 @@
+{
+  "name": "SofIA - Re-engagement Reminders",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      },
+      "name": "Cron Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0],
+      "id": "reeng-cron-001"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Fetch conversations abandonadas que necesitan re-engagement\nconst SUPABASE_URL = $env.N8N_SUPABASE_URL || 'https://inhyrrjidhzrbqecnptn.supabase.co';\nconst SERVICE_KEY = $env.N8N_SUPABASE_SERVICE_KEY;\n\nlet conversations;\ntry {\n  conversations = await this.helpers.httpRequest({\n    method: 'POST',\n    url: SUPABASE_URL + '/rest/v1/rpc/get_conversations_to_reengage',\n    headers: {\n      'apikey': SERVICE_KEY,\n      'Authorization': 'Bearer ' + SERVICE_KEY,\n      'Content-Type': 'application/json'\n    },\n    body: {},\n    json: true\n  });\n} catch(e) {\n  console.error(JSON.stringify({ ts: new Date().toISOString(), event: 'FETCH_ERROR', error: e.message }));\n  conversations = [];\n}\n\nif (!Array.isArray(conversations) || conversations.length === 0) {\n  console.log(JSON.stringify({ ts: new Date().toISOString(), event: 'NO_CONVERSATIONS' }));\n  return [{ json: { no_conversations: true, count: 0 } }];\n}\n\nconsole.log(JSON.stringify({ ts: new Date().toISOString(), event: 'CONVERSATIONS_FOUND', count: conversations.length }));\n\nreturn conversations.map(c => ({ json: c }));"
+      },
+      "name": "Fetch Abandoned Conversations",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [240, 0],
+      "id": "reeng-fetch-002"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "" },
+          "conditions": [
+            {
+              "id": "check-conversations",
+              "leftValue": "={{ $json.no_conversations }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "notTrue" }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "name": "Has Conversations?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [480, 0],
+      "id": "reeng-if-003"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Para cada conversación abandonada:\n// - R1: buscar slots ofrecidos en Chatwoot y re-presentarlos\n// - R2: mensaje de último intento (template-style)\n\nconst item = $input.first().json;\nconst CHATWOOT_BASE = 'https://chat.redsolucionesti.com';\nconst CHATWOOT_TOKEN = item.chatwoot_api_token || 'yypAwZDH2dV3crfbqJqWCgj1';\nconst account_id = item.chatwoot_account_id || 2;\nconst conversation_id = item.chatwoot_conversation_id;\nconst reminder_type = item.reminder_type; // 'R1' | 'R2'\nconst patient_name = item.patient_name || '';\nconst first_name = patient_name.split(' ')[0] || '';\nconst greeting = first_name ? ('Hola ' + first_name + '! 👋') : 'Hola! 👋';\n\nlet message_content = '';\n\nif (reminder_type === 'R1') {\n  // Intentar recuperar los slots ofrecidos\n  let slots = [];\n  try {\n    const resp = await this.helpers.httpRequest({\n      method: 'GET',\n      url: CHATWOOT_BASE + '/api/v1/accounts/' + account_id + '/conversations/' + conversation_id + '/messages',\n      headers: { 'api_access_token': CHATWOOT_TOKEN }\n    });\n    const messages = (resp.payload || []).reverse();\n    const slotNote = messages.find(m =>\n      m.private &&\n      typeof m.content === 'string' &&\n      m.content.startsWith('SOFIA_SLOTS:')\n    );\n    if (slotNote) {\n      const raw = slotNote.content.replace('SOFIA_SLOTS:', '');\n      const parsed = JSON.parse(raw);\n      slots = Array.isArray(parsed) ? parsed : (parsed.slots || []);\n    }\n  } catch(e) {\n    console.error(JSON.stringify({ ts: new Date().toISOString(), event: 'SLOTS_FETCH_ERROR', conv: conversation_id, error: e.message }));\n  }\n\n  if (slots.length > 0) {\n    // Re-ofrecer los mismos slots\n    const slot_lines = slots.map((s, i) => {\n      const label = s.label || s.display || (s.date + ' ' + s.time);\n      return '⏰ Opción ' + (i + 1) + ': ' + label;\n    }).join('\\n');\n\n    message_content = greeting + '\\n\\n' +\n      'Notamos que no terminaste de elegir tu horario para tu cita 🦷\\n\\n' +\n      'Aquí están las opciones que tenías disponibles:\\n' +\n      slot_lines + '\\n\\n' +\n      'Responde con el número de tu opción preferida y listo 😊';\n  } else {\n    // Sin slots guardados — mensaje genérico\n    message_content = greeting + '\\n\\n' +\n      'Notamos que no terminaste de agendar tu cita. ¿Pudimos ayudarte? 🦷\\n\\n' +\n      'Si quieres, dime qué día te viene mejor y te busco los horarios disponibles 😊';\n  }\n\n} else {\n  // R2: mensaje de último intento, más breve\n  message_content = greeting + '\\n\\n' +\n    '⏰ Seguimos aquí si necesitas agendar tu cita dental.\\n\\n' +\n    'Tenemos horarios disponibles esta semana. ¿Te agendamos ahora?\\n\\n' +\n    'Si prefieres hablar con un asesor, también puedes escribirnos directamente 😊';\n}\n\nconsole.log(JSON.stringify({\n  ts: new Date().toISOString(),\n  event: 'MESSAGE_BUILT',\n  conv: conversation_id,\n  type: reminder_type,\n  len: message_content.length\n}));\n\nreturn [{\n  json: {\n    ...item,\n    message_content: message_content\n  }\n}];"
+      },
+      "name": "Fetch Slots & Build Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, -120],
+      "id": "reeng-build-004"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://chat.redsolucionesti.com/api/v1/accounts/{{ $json.chatwoot_account_id || 2 }}/conversations/{{ $json.chatwoot_conversation_id }}/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "={{ $json.chatwoot_api_token || 'yypAwZDH2dV3crfbqJqWCgj1' }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"content\": {{ JSON.stringify($json.message_content) }}, \"message_type\": \"outgoing\"}"
+      },
+      "name": "Send via Chatwoot",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [960, -120],
+      "id": "reeng-send-005"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($env.N8N_SUPABASE_URL || 'https://inhyrrjidhzrbqecnptn.supabase.co') + '/rest/v1/rpc/mark_reengagement_sent' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.N8N_SUPABASE_SERVICE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.N8N_SUPABASE_SERVICE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"p_clinic_id\": {{ JSON.stringify($json.clinic_id) }}, \"p_chatwoot_conversation_id\": {{ JSON.stringify($json.chatwoot_conversation_id) }}, \"p_chatwoot_account_id\": {{ $json.chatwoot_account_id || 2 }}, \"p_chatwoot_inbox_id\": {{ $json.chatwoot_inbox_id || 10 }}, \"p_patient_name\": {{ JSON.stringify($json.patient_name || '') }}, \"p_phone\": {{ JSON.stringify($json.phone || '') }}, \"p_reminder_type\": {{ JSON.stringify($json.reminder_type) }}}"
+      },
+      "name": "Mark Sent in Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1200, -120],
+      "id": "reeng-mark-006"
+    },
+    {
+      "parameters": {},
+      "name": "No Conversations",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [720, 120],
+      "id": "reeng-noop-007"
+    }
+  ],
+  "connections": {
+    "Cron Trigger": {
+      "main": [
+        [{ "node": "Fetch Abandoned Conversations", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch Abandoned Conversations": {
+      "main": [
+        [{ "node": "Has Conversations?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Has Conversations?": {
+      "main": [
+        [{ "node": "Fetch Slots & Build Message", "type": "main", "index": 0 }],
+        [{ "node": "No Conversations", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch Slots & Build Message": {
+      "main": [
+        [{ "node": "Send via Chatwoot", "type": "main", "index": 0 }]
+      ]
+    },
+    "Send via Chatwoot": {
+      "main": [
+        [{ "node": "Mark Sent in Supabase", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "tags": ["sofia", "reminders", "reengagement"],
+  "pinData": {}
+}

@@ -100,6 +100,10 @@ BEGIN
     AND cm.intent        = 'CREATE_EVENT'
     AND cm.booked        = false
     AND cm.message_count >= 2
+    -- Solo clínicas activas con reengagement habilitado (opt-out: ausente = habilitado)
+    AND c.active = true
+    AND (c.bot_config->>'reengagement_enabled' IS NULL
+         OR c.bot_config->>'reengagement_enabled' = 'true')
     -- Ventana R1: entre 1h30m y 3h de silencio
     AND cv.last_activity_at BETWEEN now() - interval '3 hours'
                                 AND now() - interval '1 hour 30 minutes'
@@ -136,6 +140,9 @@ BEGIN
     AND cv.bot_paused    = false
     AND cm.intent        = 'CREATE_EVENT'
     AND cm.booked        = false
+    AND c.active         = true
+    AND (c.bot_config->>'reengagement_enabled' IS NULL
+         OR c.bot_config->>'reengagement_enabled' = 'true')
     AND rr.reminder_1_sent = true
     AND rr.reminder_2_sent = false
     AND rr.stopped         = false

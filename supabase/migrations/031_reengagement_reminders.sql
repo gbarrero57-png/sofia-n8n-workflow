@@ -81,9 +81,9 @@ BEGIN
     c.chatwoot_inbox_id,
     cv.clinic_id,
     c.name                    AS clinic_name,
-    c.chatwoot_api_token,
+    NULL::TEXT                AS chatwoot_api_token,  -- clinics no tiene esta columna; workflow usa fallback hardcoded
     cv.patient_name,
-    cv.last_message           AS phone,   -- last_message se reutiliza para phone en algunos flows
+    NULL::TEXT                AS phone,  -- phone no disponible sin appointment; Chatwoot solo necesita conversation_id
     cv.last_activity_at,
     'R1'::TEXT                AS reminder_type,
     rr.id                     AS reengagement_id
@@ -118,9 +118,9 @@ BEGIN
     c.chatwoot_inbox_id,
     cv.clinic_id,
     c.name,
-    c.chatwoot_api_token,
+    NULL::TEXT,
     cv.patient_name,
-    cv.last_message,
+    NULL::TEXT,
     cv.last_activity_at,
     'R2'::TEXT,
     rr.id

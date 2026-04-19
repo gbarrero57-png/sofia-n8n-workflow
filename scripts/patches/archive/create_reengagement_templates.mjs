@@ -14,7 +14,7 @@
  */
 
 const ACCOUNT_SID = 'AC4080780a4b4a7d8e7b107a39f01abad3';
-const AUTH_TOKEN  = '28b9a195bc04dbb6f5045d1971b9bd6a';
+const AUTH_TOKEN  = '6504179bc74222d9da8c8125f20bcfdf';
 const AUTH        = Buffer.from(`${ACCOUNT_SID}:${AUTH_TOKEN}`).toString('base64');
 
 // ── API helpers ───────────────────────────────────────────────────────────────

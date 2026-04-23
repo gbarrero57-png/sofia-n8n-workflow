@@ -23,18 +23,12 @@
 
 import https from 'https';
 
-const SUPABASE_URL = process.env.N8N_HINODE_SUPABASE_URL;
+const SUPABASE_URL = process.env.N8N_HINODE_SUPABASE_URL || 'https://mzprgmwcaegtkxmuzkrp.supabase.co';
 const SERVICE_KEY  = process.env.N8N_HINODE_SUPABASE_SERVICE_KEY;
 
-if (!SUPABASE_URL || !SERVICE_KEY) {
-  console.error('❌ Faltan variables de entorno del proyecto Hinode:');
-  console.error('   N8N_HINODE_SUPABASE_URL');
-  console.error('   N8N_HINODE_SUPABASE_SERVICE_KEY');
-  console.error('');
-  console.error('Ejemplo:');
-  console.error('  N8N_HINODE_SUPABASE_URL=https://xxxx.supabase.co \\');
-  console.error('  N8N_HINODE_SUPABASE_SERVICE_KEY=eyJ... \\');
-  console.error('  node scripts/ops/onboard_hinode_store.mjs');
+if (!SERVICE_KEY) {
+  console.error('❌ Falta variable de entorno: N8N_HINODE_SUPABASE_SERVICE_KEY');
+  console.error('   Obtén el service role key desde Supabase Dashboard → Settings → API');
   process.exit(1);
 }
 

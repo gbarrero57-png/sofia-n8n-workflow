@@ -1,0 +1,1082 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Luméa — Cosméticos de lujo brasileños. Fragancias, cremas y cuidado personal premium con entrega a domicilio en Lima y provincias." />
+  <title>LUMÉA — Belleza Premium</title>
+
+  <!-- Google Fonts: Cormorant (luxury serif) + DM Sans (clean body) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;0,700;1,300;1,400&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+
+  <style>
+    /* ── Design Tokens ─────────────────────────────────────────── */
+    :root {
+      --black:      #000000;
+      --black-deep: #080808;
+      --black-card: rgba(8,8,8,0.80);
+      --gold:       #D4AF37;
+      --gold-light: #E8C84A;
+      --gold-dark:  #A88A1C;
+      --white:      #FFFFFF;
+      --white-dim:  rgba(255,255,255,0.72);
+      --white-mute: rgba(255,255,255,0.38);
+      --border:     rgba(212,175,55,0.18);
+      --border-h:   rgba(212,175,55,0.55);
+      --radius:     3px;
+      --radius-md:  6px;
+      --radius-lg:  10px;
+      --radius-pill:50px;
+      --serif:      'Cormorant Garamond', Georgia, 'Times New Roman', serif;
+      --sans:       'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --shadow:     0 2px 16px rgba(0,0,0,0.50);
+      --shadow-gold:0 0 40px rgba(212,175,55,0.12);
+    }
+
+    /* ── Reset ─────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: var(--sans);
+      color: var(--white);
+      min-height: 100vh;
+      overflow-x: hidden;
+      background: var(--black-deep)
+        url('https://images.unsplash.com/photo-1596462502278-27bfdc403348?auto=format&fit=crop&w=1920&q=80')
+        center center / cover fixed no-repeat;
+    }
+
+    /* ── Background overlay — near-black, warm tint ────────────── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background: linear-gradient(
+        160deg,
+        rgba(0,0,0,0.97) 0%,
+        rgba(4,3,1,0.94) 50%,
+        rgba(0,0,0,0.97) 100%
+      );
+      z-index: 0; pointer-events: none;
+    }
+
+    /* All content layers */
+    .promo-bar, header, .hero, .trust-strip, .how-to,
+    .tabs-wrap, .grid-wrap, .testimonials, .faq-section,
+    footer, #toast, .fab-wa, .modal-overlay { position: relative; z-index: 10; }
+
+    /* ── Subtle gold ambient orbs ──────────────────────────────── */
+    .orb {
+      position: fixed; border-radius: 50%;
+      filter: blur(100px); pointer-events: none; z-index: 1;
+      animation: orbDrift ease-in-out infinite alternate;
+    }
+    .orb1 { width:500px; height:500px; background:rgba(212,175,55,0.06); top:-80px; left:-200px; animation-duration:20s; }
+    .orb2 { width:350px; height:350px; background:rgba(212,175,55,0.04); bottom:5%; right:-100px; animation-duration:28s; animation-delay:-10s; }
+    @keyframes orbDrift {
+      from { transform: translateY(0) translateX(0); }
+      to   { transform: translateY(-40px) translateX(20px); }
+    }
+
+    /* ── Promo bar ─────────────────────────────────────────────── */
+    .promo-bar {
+      background: linear-gradient(90deg, var(--gold-dark), var(--gold), var(--gold-dark));
+      background-size: 200%;
+      animation: goldShimmer 5s linear infinite;
+      text-align: center;
+      padding: 10px 20px;
+      font-family: var(--sans);
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--black);
+    }
+    .promo-bar strong { font-weight: 800; }
+    @keyframes goldShimmer {
+      0%  { background-position: 0% center; }
+      100%{ background-position: 200% center; }
+    }
+
+    /* ── Header ────────────────────────────────────────────────── */
+    header {
+      background: rgba(0,0,0,0.90);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid rgba(212,175,55,0.12);
+      padding: 16px 32px;
+      display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 100;
+    }
+    .header-brand { display: flex; align-items: center; gap: 14px; }
+    .logo-mark {
+      width: 40px; height: 40px; border-radius: 50%;
+      border: 1.5px solid var(--gold);
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--serif); font-size: 1.1rem; font-weight: 400;
+      color: var(--gold); letter-spacing: 0.5px;
+      box-shadow: 0 0 20px rgba(212,175,55,0.20);
+    }
+    .brand-text h1 {
+      font-family: var(--serif);
+      font-size: 1.35rem;
+      font-weight: 600;
+      letter-spacing: 5px;
+      text-transform: uppercase;
+      color: var(--white);
+    }
+    .brand-text h1 span { color: var(--gold); }
+    .live-label { font-size: 0.60rem; color: var(--white-mute); display: flex; align-items: center; gap: 5px; margin-top: 3px; letter-spacing: 1.5px; text-transform: uppercase; }
+    .live-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--gold); flex-shrink: 0; animation: livePulse 2s ease-in-out infinite; }
+    @keyframes livePulse {
+      0%,100%{ opacity: 1; }
+      50%    { opacity: 0.4; }
+    }
+    .btn-wa-global {
+      background: transparent;
+      border: 1px solid var(--gold);
+      color: var(--gold);
+      border-radius: var(--radius-pill);
+      padding: 9px 20px;
+      font-family: var(--sans); font-size: 0.72rem; font-weight: 600;
+      letter-spacing: 1.5px; text-transform: uppercase;
+      text-decoration: none; display: flex; align-items: center; gap: 8px;
+      transition: background 0.25s, color 0.25s, box-shadow 0.25s;
+      white-space: nowrap;
+    }
+    .btn-wa-global:hover {
+      background: var(--gold); color: var(--black);
+      box-shadow: 0 0 24px rgba(212,175,55,0.30);
+    }
+
+    /* ── Divider line ──────────────────────────────────────────── */
+    .divider {
+      width: 60px; height: 1px;
+      background: linear-gradient(90deg, transparent, var(--gold), transparent);
+      margin: 0 auto;
+    }
+    .divider-full {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(212,175,55,0.25), transparent);
+      margin: 0 32px;
+    }
+
+    /* ── Hero ──────────────────────────────────────────────────── */
+    .hero {
+      text-align: center;
+      padding: 72px 32px 48px;
+      animation: fadeUp 1s cubic-bezier(.22,1,.36,1) both;
+    }
+    @keyframes fadeUp { from { opacity:0; transform:translateY(24px); } to { opacity:1; transform:translateY(0); } }
+
+    .hero-eyebrow {
+      font-family: var(--sans);
+      font-size: 0.65rem; font-weight: 500;
+      letter-spacing: 4px; text-transform: uppercase;
+      color: var(--gold); margin-bottom: 20px;
+      animation: fadeUp 1s 0.1s cubic-bezier(.22,1,.36,1) both;
+    }
+    .hero h2 {
+      font-family: var(--serif);
+      font-size: clamp(2.4rem, 6vw, 4.2rem);
+      font-weight: 300; line-height: 1.12;
+      letter-spacing: -0.5px;
+      margin-bottom: 6px;
+      animation: fadeUp 1s 0.15s cubic-bezier(.22,1,.36,1) both;
+    }
+    .hero h2 em {
+      font-style: italic; font-weight: 400;
+      color: var(--gold);
+    }
+    .hero-subtitle {
+      font-family: var(--serif);
+      font-size: clamp(1.4rem, 3vw, 2rem);
+      font-weight: 300; font-style: italic;
+      color: var(--white-dim);
+      margin-bottom: 28px;
+      animation: fadeUp 1s 0.2s cubic-bezier(.22,1,.36,1) both;
+    }
+    .hero p {
+      font-size: 0.88rem; font-weight: 300; line-height: 1.8;
+      color: var(--white-mute); max-width: 460px;
+      margin: 0 auto 36px; letter-spacing: 0.2px;
+      animation: fadeUp 1s 0.25s cubic-bezier(.22,1,.36,1) both;
+    }
+    .hero-stats {
+      display: flex; justify-content: center; gap: 0;
+      flex-wrap: wrap;
+      animation: fadeUp 1s 0.3s cubic-bezier(.22,1,.36,1) both;
+    }
+    .stat {
+      padding: 16px 28px;
+      border-right: 1px solid rgba(212,175,55,0.15);
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+    }
+    .stat:last-child { border-right: none; }
+    .stat-num {
+      font-family: var(--serif); font-size: 1.6rem; font-weight: 400;
+      color: var(--gold); letter-spacing: -0.5px;
+    }
+    .stat-lbl {
+      font-size: 0.60rem; font-weight: 500; letter-spacing: 2px;
+      text-transform: uppercase; color: var(--white-mute);
+    }
+
+    /* ── Trust strip ───────────────────────────────────────────── */
+    .trust-strip {
+      display: flex; justify-content: center; flex-wrap: wrap; gap: 10px;
+      padding: 32px 32px 8px; max-width: 900px; margin: 0 auto;
+      animation: fadeUp 1s 0.35s cubic-bezier(.22,1,.36,1) both;
+    }
+    .trust-badge {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 8px 16px;
+      font-size: 0.68rem; font-weight: 500;
+      letter-spacing: 1.5px; text-transform: uppercase;
+      color: var(--white-dim);
+      display: flex; align-items: center; gap: 8px;
+      transition: border-color 0.25s, color 0.25s;
+    }
+    .trust-badge:hover { border-color: var(--gold); color: var(--white); }
+    .trust-badge .tb-icon { font-size: 0.85rem; }
+
+    /* ── How to buy ────────────────────────────────────────────── */
+    .how-to {
+      max-width: 860px; margin: 40px auto 0; padding: 0 32px;
+      animation: fadeUp 1s 0.4s cubic-bezier(.22,1,.36,1) both;
+    }
+    .how-to-title {
+      text-align: center; font-size: 0.60rem; font-weight: 500;
+      letter-spacing: 3px; text-transform: uppercase;
+      color: var(--white-mute); margin-bottom: 20px;
+    }
+    .steps { display: flex; justify-content: center; gap: 0; flex-wrap: wrap; }
+    .step {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 24px; text-align: center;
+      flex: 1; min-width: 150px; max-width: 220px;
+      position: relative;
+      transition: border-color 0.25s;
+    }
+    .step:hover { border-color: var(--gold); }
+    .step + .step { border-left: none; }
+    .step-icon { font-size: 1.3rem; margin-bottom: 8px; }
+    .step-num {
+      font-size: 0.55rem; font-weight: 600; letter-spacing: 2px;
+      text-transform: uppercase; color: var(--gold); margin-bottom: 6px;
+    }
+    .step-txt { font-size: 0.78rem; font-weight: 300; line-height: 1.4; color: var(--white-dim); }
+
+    /* ── Category tabs ─────────────────────────────────────────── */
+    .tabs-wrap {
+      background: rgba(0,0,0,0.85);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+      position: sticky; top: 72px; z-index: 90;
+      overflow-x: auto; scrollbar-width: none;
+      animation: fadeUp 1s 0.45s cubic-bezier(.22,1,.36,1) both;
+    }
+    .tabs-wrap::-webkit-scrollbar { display: none; }
+    .tabs { display: flex; gap: 0; padding: 0 32px; min-width: max-content; }
+    .tab {
+      background: transparent; border: none; border-bottom: 2px solid transparent;
+      padding: 14px 20px;
+      font-family: var(--sans); font-size: 0.68rem; font-weight: 500;
+      letter-spacing: 2px; text-transform: uppercase;
+      color: var(--white-mute); cursor: pointer;
+      transition: color 0.25s, border-color 0.25s;
+      white-space: nowrap;
+    }
+    .tab:hover { color: var(--white); }
+    .tab.active { color: var(--gold); border-bottom-color: var(--gold); }
+
+    /* ── Grid ──────────────────────────────────────────────────── */
+    .grid-wrap { max-width: 1200px; margin: 0 auto; padding: 40px 32px 0; }
+    .results-count {
+      font-size: 0.65rem; font-weight: 500; letter-spacing: 2px;
+      text-transform: uppercase; color: var(--white-mute); margin-bottom: 24px;
+    }
+    .grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 1px; }
+    @media(min-width:540px){ .grid{ grid-template-columns: repeat(3,1fr); } }
+    @media(min-width:900px){ .grid{ grid-template-columns: repeat(4,1fr); } }
+
+    /* ── Product Card ──────────────────────────────────────────── */
+    .card {
+      background: var(--black-card);
+      border: 1px solid rgba(255,255,255,0.06);
+      display: flex; flex-direction: column; cursor: pointer;
+      transition: border-color 0.30s, box-shadow 0.30s;
+      opacity: 0; transform: translateY(30px);
+      position: relative;
+    }
+    .card.visible {
+      opacity: 1; transform: translateY(0);
+      transition: opacity 0.55s cubic-bezier(.22,1,.36,1), transform 0.55s cubic-bezier(.22,1,.36,1),
+                  border-color 0.30s, box-shadow 0.30s;
+    }
+    .card:hover {
+      border-color: var(--border-h);
+      box-shadow: var(--shadow-gold), inset 0 0 40px rgba(212,175,55,0.03);
+      z-index: 2;
+    }
+
+    .card-img {
+      width: 100%; aspect-ratio: 1;
+      background: rgba(15,12,5,0.90);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 3.2rem; position: relative; overflow: hidden;
+    }
+    .card-img::after {
+      content: ''; position: absolute; inset: 0;
+      background: linear-gradient(to bottom, transparent 60%, rgba(0,0,0,0.60) 100%);
+    }
+    .card-img img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.6s cubic-bezier(.22,1,.36,1); }
+    .card:hover .card-img img { transform: scale(1.06); }
+
+    /* Product badge */
+    .card-badge {
+      position: absolute; top: 12px; left: 12px; z-index: 5;
+      font-size: 0.55rem; font-weight: 700; letter-spacing: 1.5px;
+      text-transform: uppercase; padding: 4px 10px;
+      border: 1px solid; border-radius: var(--radius);
+    }
+    .badge-hot  { border-color: var(--gold); color: var(--gold); background: rgba(0,0,0,0.75); }
+    .badge-new  { border-color: rgba(255,255,255,0.5); color: rgba(255,255,255,0.9); background: rgba(0,0,0,0.75); }
+    .badge-gift { border-color: rgba(255,200,150,0.6); color: rgba(255,200,150,0.9); background: rgba(0,0,0,0.75); }
+    .badge-save { border-color: var(--gold); color: var(--black); background: var(--gold); }
+
+    /* Viewer count */
+    .card-viewers {
+      position: absolute; top: 12px; right: 12px; z-index: 5;
+      background: rgba(0,0,0,0.70); border: 1px solid rgba(255,255,255,0.10);
+      font-size: 0.58rem; font-weight: 500; letter-spacing: 0.5px;
+      padding: 3px 8px; border-radius: var(--radius);
+      display: flex; align-items: center; gap: 4px; color: var(--white-dim);
+    }
+    .viewer-dot { width: 4px; height: 4px; border-radius: 50%; background: var(--gold); animation: livePulse 2s ease-in-out infinite; }
+
+    .card-body { padding: 16px 16px 8px; flex: 1; display: flex; flex-direction: column; gap: 7px; }
+    .card-cat {
+      font-size: 0.58rem; font-weight: 600; letter-spacing: 2px;
+      text-transform: uppercase; color: var(--gold);
+    }
+    .card-name {
+      font-family: var(--serif); font-size: 1rem; font-weight: 400;
+      line-height: 1.25; color: var(--white);
+    }
+    .card-stars { display: flex; align-items: center; gap: 6px; }
+    .stars-val  { color: var(--gold); font-size: 0.68rem; letter-spacing: 1px; }
+    .stars-count{ font-size: 0.62rem; color: var(--white-mute); }
+    .card-desc {
+      font-size: 0.72rem; font-weight: 300; color: var(--white-mute);
+      line-height: 1.5; display: -webkit-box;
+      -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .card-price-row { display: flex; align-items: baseline; gap: 8px; margin-top: auto; padding-top: 6px; }
+    .card-price {
+      font-family: var(--serif); font-size: 1.3rem; font-weight: 400;
+      color: var(--gold-light); letter-spacing: -0.5px;
+    }
+    .card-price-orig { font-size: 0.70rem; color: var(--white-mute); text-decoration: line-through; }
+    .card-discount {
+      font-size: 0.58rem; font-weight: 600; letter-spacing: 1px;
+      color: rgba(180,220,160,0.85); border: 1px solid rgba(180,220,160,0.25);
+      border-radius: var(--radius); padding: 2px 6px;
+    }
+
+    .card-footer { padding: 0 16px 16px; display: flex; flex-direction: column; gap: 10px; }
+
+    /* Stock badges */
+    .stock-badge {
+      font-size: 0.62rem; font-weight: 500; letter-spacing: 1px;
+      padding: 4px 10px; border-radius: var(--radius);
+      display: inline-block; width: fit-content; border: 1px solid;
+    }
+    .stock-high { border-color: rgba(150,210,140,0.30); color: rgba(150,210,140,0.90); background: rgba(150,210,140,0.07); }
+    .stock-low  { border-color: rgba(212,175,55,0.35); color: var(--gold); background: rgba(212,175,55,0.07); animation: lowPulse 2s ease-in-out infinite; }
+    .stock-out  { border-color: rgba(200,100,80,0.30); color: rgba(200,100,80,0.85); background: rgba(200,100,80,0.07); }
+    @keyframes lowPulse { 0%,100%{opacity:1} 50%{opacity:0.55} }
+
+    /* WhatsApp CTA — keep green for brand recognition */
+    .btn-order {
+      background: #25D366; color: #fff; border: none;
+      border-radius: var(--radius); padding: 12px 16px;
+      font-family: var(--sans); font-size: 0.72rem; font-weight: 600;
+      letter-spacing: 1.5px; text-transform: uppercase;
+      cursor: pointer; text-align: center; text-decoration: none; display: block;
+      transition: background 0.25s, box-shadow 0.25s, transform 0.2s;
+      position: relative; overflow: hidden;
+    }
+    .btn-order::before {
+      content: ''; position: absolute; top: -50%; left: -60%; width: 200%; height: 200%;
+      background: linear-gradient(105deg, transparent 30%, rgba(255,255,255,0.22) 50%, transparent 70%);
+      transform: translateX(-100%); transition: transform 0.5s;
+    }
+    .btn-order:hover { background: #20bd58; box-shadow: 0 6px 24px rgba(37,211,102,0.35); transform: translateY(-1px); }
+    .btn-order:hover::before { transform: translateX(100%); }
+    .btn-order.disabled {
+      background: rgba(255,255,255,0.07); color: var(--white-mute);
+      box-shadow: none; cursor: not-allowed; pointer-events: none; border: 1px solid rgba(255,255,255,0.10);
+    }
+
+    /* ── Loading ───────────────────────────────────────────────── */
+    .loading { grid-column:1/-1; text-align:center; padding:80px 20px; color: var(--white-mute); display:flex; flex-direction:column; align-items:center; gap:16px; }
+    .loading-spinner { width:32px; height:32px; border:1.5px solid rgba(212,175,55,0.20); border-top-color:var(--gold); border-radius:50%; animation:spin .9s linear infinite; }
+    @keyframes spin { to{transform:rotate(360deg)} }
+    .empty { grid-column:1/-1; text-align:center; padding:80px 20px; color:var(--white-mute); font-family:var(--serif); font-size:1.1rem; }
+
+    /* ── Testimonials ──────────────────────────────────────────── */
+    .testimonials { max-width:1100px; margin:80px auto 0; padding:0 32px; }
+    .section-head { text-align:center; margin-bottom:40px; }
+    .section-eyebrow { font-size:0.60rem; font-weight:500; letter-spacing:4px; text-transform:uppercase; color:var(--gold); margin-bottom:14px; }
+    .section-head h3 { font-family:var(--serif); font-size:clamp(1.6rem,3vw,2.4rem); font-weight:300; line-height:1.2; }
+    .section-head h3 em { font-style:italic; color:var(--gold); }
+    .section-head p { font-size:0.82rem; color:var(--white-mute); margin-top:10px; font-weight:300; }
+
+    .testi-grid { display:grid; grid-template-columns:1fr; gap:1px; border:1px solid var(--border); }
+    @media(min-width:600px){ .testi-grid{grid-template-columns:repeat(3,1fr)} }
+    .testi-card {
+      background:var(--black-card); padding:32px 28px;
+      opacity:0; transform:translateY(20px);
+      transition:opacity .55s cubic-bezier(.22,1,.36,1), transform .55s cubic-bezier(.22,1,.36,1);
+      border-right:1px solid var(--border);
+    }
+    .testi-card:last-child{border-right:none}
+    .testi-card.visible{opacity:1;transform:translateY(0)}
+    .testi-stars { color:var(--gold); font-size:0.78rem; letter-spacing:2px; margin-bottom:16px; }
+    .testi-text {
+      font-family:var(--serif); font-size:0.98rem; font-weight:300; font-style:italic;
+      color:var(--white-dim); line-height:1.7; margin-bottom:20px;
+    }
+    .testi-text::before { content:'\201C'; font-size:1.4rem; color:var(--gold); vertical-align:-4px; margin-right:3px; }
+    .testi-text::after  { content:'\201D'; font-size:1.4rem; color:var(--gold); vertical-align:-4px; margin-left:3px; }
+    .testi-author { display:flex; align-items:center; gap:12px; }
+    .testi-avatar {
+      width:34px; height:34px; border-radius:50%; border:1px solid var(--border);
+      display:flex; align-items:center; justify-content:center;
+      font-family:var(--serif); font-size:1rem; font-weight:400; color:var(--gold);
+    }
+    .testi-name { font-size:0.75rem; font-weight:600; letter-spacing:0.5px; }
+    .testi-loc  { font-size:0.62rem; color:var(--white-mute); margin-top:1px; }
+    .testi-product { font-size:0.60rem; color:var(--gold); margin-top:3px; letter-spacing:0.5px; }
+
+    /* ── FAQ ───────────────────────────────────────────────────── */
+    .faq-section { max-width:760px; margin:80px auto 0; padding:0 32px; }
+    .faq-list { border:1px solid var(--border); }
+    .faq-item {
+      border-bottom:1px solid var(--border); overflow:hidden;
+      opacity:0; transform:translateY(14px);
+      transition:opacity .45s cubic-bezier(.22,1,.36,1), transform .45s cubic-bezier(.22,1,.36,1);
+    }
+    .faq-item:last-child{border-bottom:none}
+    .faq-item.visible{opacity:1;transform:translateY(0)}
+    .faq-q {
+      padding:18px 24px; font-size:0.82rem; font-weight:500; letter-spacing:0.3px;
+      cursor:pointer; display:flex; justify-content:space-between; align-items:center;
+      color:var(--white-dim); transition:color 0.2s; background:transparent;
+    }
+    .faq-q:hover{color:var(--white)}
+    .faq-q .faq-icon { font-size:0.85rem; color:var(--gold); transition:transform 0.3s; flex-shrink:0; margin-left:16px; }
+    .faq-item.open .faq-icon{transform:rotate(45deg)}
+    .faq-a {
+      font-size:0.78rem; font-weight:300; color:var(--white-mute); line-height:1.75;
+      padding:0 24px; max-height:0; overflow:hidden;
+      transition:max-height 0.4s ease, padding 0.3s;
+    }
+    .faq-item.open .faq-a{max-height:200px;padding:0 24px 20px}
+
+    /* ── Footer ────────────────────────────────────────────────── */
+    footer {
+      background: rgba(0,0,0,0.95); border-top:1px solid var(--border);
+      text-align:center; padding:48px 32px;
+      margin-top:80px;
+    }
+    .ft-brand {
+      font-family:var(--serif); font-size:1.5rem; font-weight:300;
+      letter-spacing:8px; text-transform:uppercase; color:var(--gold);
+      display:block; margin-bottom:6px;
+    }
+    .ft-tagline { font-size:0.62rem; letter-spacing:3px; text-transform:uppercase; color:var(--white-mute); margin-bottom:32px; }
+    .ft-divider { width:40px; height:1px; background:var(--gold); margin:24px auto; opacity:0.4; }
+    .ft-row { font-size:0.75rem; font-weight:300; color:var(--white-mute); line-height:2; }
+    .ft-gold { color:var(--gold); font-weight:500; }
+    .ft-sep  { margin:0 10px; color:rgba(212,175,55,0.25); }
+    .payment-icons { display:flex; justify-content:center; gap:8px; flex-wrap:wrap; margin:16px 0; }
+    .pay-chip {
+      border:1px solid var(--border); border-radius:var(--radius);
+      padding:6px 16px; font-size:0.62rem; font-weight:500; letter-spacing:1.5px;
+      text-transform:uppercase; color:var(--white-dim);
+      transition:border-color 0.2s, color 0.2s;
+    }
+    .pay-chip:hover{border-color:var(--gold);color:var(--gold)}
+    .ft-contact a { color:var(--gold); text-decoration:none; font-weight:500; font-size:0.82rem; }
+    .ft-copy { font-size:0.60rem; color:rgba(255,255,255,0.20); margin-top:20px; letter-spacing:1px; text-transform:uppercase; }
+
+    /* ── Floating WhatsApp ─────────────────────────────────────── */
+    .fab-wa {
+      position:fixed; bottom:28px; right:24px; z-index:300;
+      background:#25D366; color:#fff; text-decoration:none;
+      border-radius:var(--radius-pill); padding:14px 24px;
+      font-family:var(--sans); font-size:0.72rem; font-weight:600;
+      letter-spacing:1.5px; text-transform:uppercase;
+      display:flex; align-items:center; gap:8px;
+      box-shadow:0 6px 28px rgba(37,211,102,0.40);
+      animation:fabPulse 3s ease-in-out infinite;
+      transition:transform 0.2s;
+    }
+    .fab-wa:hover{transform:scale(1.04)}
+    .fab-icon{font-size:1.1rem}
+    @keyframes fabPulse {
+      0%,100%{box-shadow:0 6px 28px rgba(37,211,102,0.40)}
+      50%    {box-shadow:0 6px 44px rgba(37,211,102,0.70),0 0 70px rgba(37,211,102,0.15)}
+    }
+
+    /* ── Toast ─────────────────────────────────────────────────── */
+    #toast {
+      position:fixed; bottom:96px; left:50%;
+      transform:translateX(-50%) translateY(70px);
+      background:rgba(0,0,0,0.96); border:1px solid var(--border);
+      color:var(--white-dim); padding:12px 24px; border-radius:var(--radius);
+      font-size:0.75rem; font-weight:400; letter-spacing:0.3px;
+      opacity:0; transition:opacity .35s, transform .40s cubic-bezier(.22,1,.36,1);
+      pointer-events:none; z-index:200; white-space:nowrap;
+      max-width:90vw; overflow:hidden; text-overflow:ellipsis;
+      box-shadow:0 8px 40px rgba(0,0,0,0.60);
+    }
+    #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+    /* ── Modal ─────────────────────────────────────────────────── */
+    .modal-overlay {
+      position:fixed; inset:0; background:rgba(0,0,0,0.90); backdrop-filter:blur(12px);
+      z-index:500; display:flex; align-items:center; justify-content:center; padding:24px;
+      opacity:0; pointer-events:none; transition:opacity 0.3s;
+    }
+    .modal-overlay.open{opacity:1;pointer-events:all}
+    .modal-box {
+      background:#0a0a0a; border:1px solid var(--border);
+      max-width:480px; width:100%; max-height:90vh; overflow-y:auto; padding:36px;
+      transform:scale(0.94) translateY(16px);
+      transition:transform 0.35s cubic-bezier(.22,1,.36,1);
+      position:relative;
+    }
+    .modal-overlay.open .modal-box{transform:scale(1) translateY(0)}
+    .modal-close {
+      position:absolute; top:16px; right:16px;
+      background:transparent; border:1px solid var(--border); color:var(--white-mute);
+      width:30px; height:30px; cursor:pointer;
+      display:flex; align-items:center; justify-content:center;
+      font-size:0.75rem; transition:border-color 0.2s, color 0.2s;
+    }
+    .modal-close:hover{border-color:var(--gold);color:var(--gold)}
+    .modal-emoji{font-size:3.5rem;text-align:center;margin-bottom:16px}
+    .modal-cat{font-size:0.58rem;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:var(--gold);margin-bottom:6px}
+    .modal-name{font-family:var(--serif);font-size:1.5rem;font-weight:400;margin-bottom:8px}
+    .modal-stars{color:var(--gold);font-size:0.80rem;letter-spacing:2px;margin-bottom:14px}
+    .modal-desc{font-size:0.80rem;font-weight:300;color:var(--white-mute);line-height:1.75;margin-bottom:20px}
+    .modal-price-row{display:flex;align-items:baseline;gap:10px;margin-bottom:10px}
+    .modal-price{font-family:var(--serif);font-size:1.8rem;font-weight:300;color:var(--gold-light)}
+    .modal-orig{font-size:0.80rem;color:var(--white-mute);text-decoration:line-through}
+    .modal-save{font-size:0.65rem;font-weight:600;color:rgba(160,210,140,0.9);border:1px solid rgba(160,210,140,0.25);padding:3px 8px;border-radius:var(--radius)}
+    .modal-tags{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px}
+    .modal-tag{border:1px solid var(--border);border-radius:var(--radius);font-size:0.62rem;font-weight:400;padding:4px 10px;color:var(--white-mute);letter-spacing:0.5px}
+    .modal-btn{
+      display:block;background:#25D366;color:#fff;text-decoration:none;text-align:center;
+      padding:15px;border-radius:var(--radius);
+      font-family:var(--sans);font-size:0.72rem;font-weight:600;letter-spacing:2px;text-transform:uppercase;
+      transition:background 0.25s,transform 0.2s;
+    }
+    .modal-btn:hover{background:#20bd58;transform:translateY(-1px)}
+
+    /* ── Responsive adjustments ────────────────────────────────── */
+    @media(max-width:600px){
+      header{padding:14px 20px}
+      .hero{padding:52px 20px 36px}
+      .hero-stats{gap:0}
+      .stat{padding:12px 16px}
+      .trust-strip,.how-to,.grid-wrap,.testimonials,.faq-section{padding-left:20px;padding-right:20px}
+      footer{padding:40px 20px}
+      .tabs{padding:0 16px}
+      .brand-text h1{font-size:1.1rem;letter-spacing:4px}
+      .step{min-width:120px}
+    }
+  </style>
+</head>
+<body>
+
+<!-- Ambient orbs (subtle, gold only) -->
+<div class="orb orb1"></div>
+<div class="orb orb2"></div>
+
+<!-- ── Promo bar ───────────────────────────────────────────────── -->
+<div class="promo-bar">
+  🔥 <strong>OFERTA:</strong> Envío GRATIS a Lima en pedidos mayores a <strong>S/.150</strong> &nbsp;·&nbsp; Escríbenos por WhatsApp
+</div>
+
+<!-- ── Header ─────────────────────────────────────────────────── -->
+<header>
+  <div class="header-brand">
+    <div class="logo-mark">L</div>
+    <div class="brand-text">
+      <h1>LUM<span>É</span>A</h1>
+      <div class="live-label">
+        <span class="live-dot"></span>
+        <span id="live-status">Conectando...</span>
+      </div>
+    </div>
+  </div>
+  <a href="https://wa.me/51977588512?text=Hola!%20Quiero%20conocer%20el%20cat%C3%A1logo%20Lum%C3%A9a%20%F0%9F%8C%BF"
+     target="_blank" class="btn-wa-global">💬 WhatsApp</a>
+</header>
+
+<!-- ── Hero ───────────────────────────────────────────────────── -->
+<section class="hero">
+  <div class="hero-eyebrow">✦ Formulación Brasileña · Belleza Premium ✦</div>
+  <h2>Belleza que<br><em>transforma</em> tu día</h2>
+  <p>Fragancias, cremas y cuidado personal premium.<br>Entrega en Lima y todo el Perú.</p>
+  <div class="hero-stats">
+    <div class="stat"><span class="stat-num">500+</span><span class="stat-lbl">Clientas felices</span></div>
+    <div class="stat"><span class="stat-num">4.9★</span><span class="stat-lbl">Calificación</span></div>
+    <div class="stat"><span class="stat-num">24h</span><span class="stat-lbl">Entrega Lima</span></div>
+    <div class="stat"><span class="stat-num">S/.10</span><span class="stat-lbl">Envío Lima</span></div>
+  </div>
+</section>
+
+<div class="divider-full"></div>
+
+<!-- ── Trust strip ────────────────────────────────────────────── -->
+<div class="trust-strip">
+  <div class="trust-badge"><span class="tb-icon">✦</span> Marca Premium Autorizada</div>
+  <div class="trust-badge"><span class="tb-icon">◻</span> Pago 100% Seguro</div>
+  <div class="trust-badge"><span class="tb-icon">◈</span> Entrega Rápida</div>
+  <div class="trust-badge"><span class="tb-icon">◇</span> Garantía de Satisfacción</div>
+  <div class="trust-badge"><span class="tb-icon">◉</span> Fórmulas Brasileñas Premium</div>
+</div>
+
+<!-- ── How to buy ──────────────────────────────────────────────── -->
+<div class="how-to">
+  <div class="how-to-title">Proceso de compra</div>
+  <div class="steps">
+    <div class="step">
+      <div class="step-icon">✦</div>
+      <div class="step-num">01</div>
+      <div class="step-txt">Elige tu producto favorito</div>
+    </div>
+    <div class="step">
+      <div class="step-icon">◈</div>
+      <div class="step-num">02</div>
+      <div class="step-txt">Haz clic en "Pedir por WhatsApp"</div>
+    </div>
+    <div class="step">
+      <div class="step-icon">◇</div>
+      <div class="step-num">03</div>
+      <div class="step-txt">Coordina pago y recibe en casa</div>
+    </div>
+  </div>
+</div>
+
+<div class="divider-full" style="margin-top:40px"></div>
+
+<!-- ── Tabs ────────────────────────────────────────────────────── -->
+<div class="tabs-wrap">
+  <div class="tabs" id="tabs">
+    <button class="tab active" data-cat="all">Todos</button>
+    <button class="tab" data-cat="fragancia">Fragancias</button>
+    <button class="tab" data-cat="crema_corporal">Cremas</button>
+    <button class="tab" data-cat="cuidado_facial">Facial</button>
+    <button class="tab" data-cat="kit">Kits</button>
+  </div>
+</div>
+
+<!-- ── Product grid ────────────────────────────────────────────── -->
+<div class="grid-wrap">
+  <div id="results-count" class="results-count"></div>
+  <div class="grid" id="grid">
+    <div class="loading"><div class="loading-spinner"></div><div>Cargando catálogo...</div></div>
+  </div>
+</div>
+
+<!-- ── Testimonials ────────────────────────────────────────────── -->
+<section class="testimonials">
+  <div class="section-head">
+    <div class="section-eyebrow">Testimonios</div>
+    <h3>Lo que dicen nuestras <em>clientas</em></h3>
+    <p>Más de 500 personas ya confían en Luméa</p>
+  </div>
+  <div class="testi-grid">
+    <div class="testi-card">
+      <div class="testi-stars">★★★★★</div>
+      <p class="testi-text">La Esplêndida Rose es increíble, dura todo el día y me preguntan constantemente qué perfume uso. ¡Se los recomiendo a todas!</p>
+      <div class="testi-author">
+        <div class="testi-avatar">V</div>
+        <div>
+          <div class="testi-name">Valentina R.</div>
+          <div class="testi-loc">Lima, Miraflores</div>
+          <div class="testi-product">Esplêndida Rose</div>
+        </div>
+      </div>
+    </div>
+    <div class="testi-card">
+      <div class="testi-stars">★★★★★</div>
+      <p class="testi-text">Compré el Kit Bienvenida para regalo y fue un éxito. La calidad es impresionante para el precio, definitivamente vuelvo a pedir.</p>
+      <div class="testi-author">
+        <div class="testi-avatar">M</div>
+        <div>
+          <div class="testi-name">Mariela C.</div>
+          <div class="testi-loc">Lima, San Isidro</div>
+          <div class="testi-product">Kit Bienvenida</div>
+        </div>
+      </div>
+    </div>
+    <div class="testi-card">
+      <div class="testi-stars">★★★★★</div>
+      <p class="testi-text">El sérum antienvejecimiento funciona de verdad. En 2 semanas noté la diferencia. El envío fue súper rápido, llegó al día siguiente.</p>
+      <div class="testi-author">
+        <div class="testi-avatar">P</div>
+        <div>
+          <div class="testi-name">Patricia L.</div>
+          <div class="testi-loc">Lima, Surco</div>
+          <div class="testi-product">Sérum Facial</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── FAQ ────────────────────────────────────────────────────── -->
+<section class="faq-section">
+  <div class="section-head">
+    <div class="section-eyebrow">FAQ</div>
+    <h3>Preguntas <em>frecuentes</em></h3>
+  </div>
+  <div class="faq-list">
+    <div class="faq-item">
+      <div class="faq-q">¿Cuánto duran las fragancias? <span class="faq-icon">+</span></div>
+      <div class="faq-a">Nuestras fragancias tienen una duración promedio de 6 a 10 horas en la piel. Las versiones masculinas tienden a proyectar más al inicio, mientras que las femeninas tienen un dry-down más suave y persistente.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">¿Los productos son originales? <span class="faq-icon">+</span></div>
+      <div class="faq-a">Sí, 100%. Somos distribuidores autorizados de Hinode Group Brasil. Todos los productos vienen con su sello de autenticidad y son fabricados en las plantas de producción oficiales de Hinode en Brasil.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">¿Cómo realizo el pago? <span class="faq-icon">+</span></div>
+      <div class="faq-a">Aceptamos Yape, Plin y transferencia bancaria BCP. Al coordinar tu pedido por WhatsApp te enviaremos los datos de pago. El envío se coordina una vez confirmado el pago.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">¿Hacen delivery a provincias? <span class="faq-icon">+</span></div>
+      <div class="faq-a">Sí, enviamos a todo el Perú. El costo de envío a Lima es S/.10 con entrega en 24-48h. Para provincias el costo es S/.20 con entrega en 3-5 días hábiles vía Olva Courier o el servicio más conveniente para tu zona.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">¿Tienen garantía de devolución? <span class="faq-icon">+</span></div>
+      <div class="faq-a">Sí. Si tu producto llega dañado o incompleto, te lo cambiamos sin costo adicional. Contáctanos por WhatsApp con foto del producto dentro de las 48h de recibido y coordinamos el cambio de inmediato.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Footer ─────────────────────────────────────────────────── -->
+<footer>
+  <span class="ft-brand">Luméa</span>
+  <div class="ft-tagline">Belleza Premium · Formulación Brasileña</div>
+  <div class="ft-divider"></div>
+  <div class="ft-row">
+    <span class="ft-gold">Envíos</span>
+    &nbsp;Lima S/.10 (24-48h)
+    <span class="ft-sep">·</span>
+    Provincias S/.20 (3-5 días)
+  </div>
+  <div class="payment-icons">
+    <div class="pay-chip">Yape</div>
+    <div class="pay-chip">Plin</div>
+    <div class="pay-chip">BCP</div>
+  </div>
+  <div class="ft-row ft-contact">
+    WhatsApp: <a href="https://wa.me/51977588512" target="_blank">+51 977 588 512</a>
+  </div>
+  <div class="ft-copy">© 2026 Luméa · Distribución Autorizada</div>
+</footer>
+
+<!-- ── Floating WhatsApp ───────────────────────────────────────── -->
+<a href="https://wa.me/51977588512?text=Hola!%20Quiero%20hacer%20un%20pedido%20Lum%C3%A9a%20%F0%9F%8C%BF"
+   target="_blank" class="fab-wa">
+  <span class="fab-icon">💬</span> Pedir ahora
+</a>
+
+<!-- ── Toast ──────────────────────────────────────────────────── -->
+<div id="toast"></div>
+
+<!-- ── Modal ──────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="modal">
+  <div class="modal-box" id="modal-box">
+    <button class="modal-close" id="modal-close">✕</button>
+    <div id="modal-content"></div>
+  </div>
+</div>
+
+<script>
+/* ─────────────────────────────────────────────────────────────────────────
+   CONFIG — idéntica a la versión anterior
+───────────────────────────────────────────────────────────────────────── */
+const SUPABASE_URL      = 'https://mzprgmwcaegtkxmuzkrp.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im16cHJnbXdjYWVndGt4bXV6a3JwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY5MTMxMjksImV4cCI6MjA5MjQ4OTEyOX0.cbxiEETCJuupSZIHD4CLBeRKJ2dfWNY9Ab5ehWD23_g';
+const WA_NUMBER = '51977588512';
+
+const { createClient } = supabase;
+const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let allProducts    = [];
+let activeCategory = 'all';
+
+/* ── Product metadata ─────────────────────────────────────────────────── */
+const CAT_EMOJI = { fragancia:'🌸', crema_corporal:'💆', cuidado_facial:'✨', kit:'🎁' };
+
+const BADGES = {
+  'HIN-F001': { cls:'badge-hot',  txt:'Best Seller' },
+  'HIN-F002': { cls:'badge-hot',  txt:'Best Seller' },
+  'HIN-F005': { cls:'badge-gift', txt:'Ideal Regalo' },
+  'HIN-C001': { cls:'badge-hot',  txt:'Favorito' },
+  'HIN-CF001':{ cls:'badge-new',  txt:'Nuevo' },
+  'HIN-CF002':{ cls:'badge-new',  txt:'Nuevo' },
+  'HIN-K001': { cls:'badge-hot',  txt:'Más Pedido' },
+  'HIN-K002': { cls:'badge-save', txt:'Ahorra S/.50' },
+};
+
+const RATINGS = {
+  'HIN-F001':'★★★★★ (47)', 'HIN-F002':'★★★★★ (38)', 'HIN-F003':'★★★★☆ (29)',
+  'HIN-F004':'★★★★★ (22)', 'HIN-F005':'★★★★★ (54)', 'HIN-C001':'★★★★★ (41)',
+  'HIN-C002':'★★★★☆ (18)', 'HIN-C003':'★★★★★ (25)', 'HIN-CF001':'★★★★★ (13)',
+  'HIN-CF002':'★★★★☆ (9)', 'HIN-K001':'★★★★★ (61)', 'HIN-K002':'★★★★★ (34)',
+};
+
+function viewers(sku) {
+  const seed = (sku || '').split('').reduce((a,c) => a + c.charCodeAt(0), 0);
+  return 3 + (seed % 11);
+}
+function refPrice(p)   { return Math.ceil(p * 1.35 / 5) * 5; }
+function discPct(s, r) { return Math.round((1 - s / r) * 100); }
+function waLink(name, price) {
+  return `https://wa.me/${WA_NUMBER}?text=${encodeURIComponent(`Hola! Quiero pedir *${name}* (S/. ${price}) — Luméa 💎`)}`;
+}
+
+function stockBadge(stock) {
+  if (stock === 0) return `<span class="stock-badge stock-out">Agotado</span>`;
+  if (stock < 10)  return `<span class="stock-badge stock-low">⚠ Solo ${stock} disponibles</span>`;
+  return                   `<span class="stock-badge stock-high">En stock (${stock})</span>`;
+}
+
+/* ── Render card ──────────────────────────────────────────────────────── */
+function renderCard(p) {
+  const emoji   = CAT_EMOJI[p.category] || '✦';
+  const imgHtml = p.image_url ? `<img src="${p.image_url}" alt="${p.name}" loading="lazy" />` : emoji;
+  const badge   = BADGES[p.sku];
+  const rating  = RATINGS[p.sku] || '★★★★★ (12)';
+  const vCount  = viewers(p.sku || p.id);
+  const ref     = refPrice(p.price_sale);
+  const disc    = discPct(p.price_sale, ref);
+  const orderBtn = p.stock > 0
+    ? `<a href="${waLink(p.name, Number(p.price_sale).toFixed(2))}" target="_blank" class="btn-order" onclick="event.stopPropagation()">📱 Pedir por WhatsApp</a>`
+    : `<span class="btn-order disabled">Sin stock</span>`;
+
+  return `
+    <div class="card" id="card-${p.id}" data-id="${p.id}" data-cat="${p.category}">
+      <div class="card-img">
+        ${imgHtml}
+        ${badge ? `<div class="card-badge ${badge.cls}">${badge.txt}</div>` : ''}
+        <div class="card-viewers"><span class="viewer-dot"></span>${vCount} viendo</div>
+      </div>
+      <div class="card-body">
+        <div class="card-cat">${p.category.replace('_',' ')}</div>
+        <div class="card-name">${p.name}</div>
+        <div class="card-stars">
+          <span class="stars-val">${rating.split(' ')[0]}</span>
+          <span class="stars-count">${rating.split(' ')[1] || ''}</span>
+        </div>
+        <div class="card-desc">${p.description || ''}</div>
+        <div class="card-price-row">
+          <span class="card-price">S/. ${Number(p.price_sale).toFixed(2)}</span>
+          <span class="card-price-orig">S/. ${ref.toFixed(2)}</span>
+          <span class="card-discount">-${disc}%</span>
+        </div>
+      </div>
+      <div class="card-footer">
+        <div id="stock-${p.id}">${stockBadge(p.stock)}</div>
+        ${orderBtn}
+      </div>
+    </div>`;
+}
+
+/* ── Scroll-in ────────────────────────────────────────────────────────── */
+const io = new IntersectionObserver((entries) => {
+  entries.forEach((e, i) => {
+    if (e.isIntersecting) {
+      setTimeout(() => e.target.classList.add('visible'), i * 55);
+      io.unobserve(e.target);
+    }
+  });
+}, { threshold: 0.06 });
+
+function observeAll() {
+  document.querySelectorAll('.card:not(.visible),.testi-card:not(.visible),.faq-item:not(.visible)')
+    .forEach(el => io.observe(el));
+}
+
+/* ── Render grid ──────────────────────────────────────────────────────── */
+function renderGrid() {
+  const filtered = activeCategory === 'all'
+    ? allProducts : allProducts.filter(p => p.category === activeCategory);
+  const grid  = document.getElementById('grid');
+  const count = document.getElementById('results-count');
+  if (!filtered.length) {
+    grid.innerHTML = `<div class="empty">Sin productos en esta categoría</div>`;
+    count.textContent = ''; return;
+  }
+  grid.innerHTML = filtered.map(renderCard).join('');
+  count.textContent = `${filtered.length} producto${filtered.length!==1?'s':''}`;
+  observeAll();
+}
+
+/* ── Stock update (Realtime) ──────────────────────────────────────────── */
+function updateProductStock(id, newStock) {
+  const stockEl = document.getElementById(`stock-${id}`);
+  if (stockEl) stockEl.innerHTML = stockBadge(newStock);
+  const p = allProducts.find(x => x.id === id);
+  if (p) p.stock = newStock;
+  const card = document.getElementById(`card-${id}`);
+  if (!card) return;
+  const footer = card.querySelector('.card-footer');
+  if (!footer) return;
+  const btn = footer.querySelector('.btn-order, a.btn-order');
+  if (!btn) return;
+  if (newStock > 0) {
+    btn.outerHTML = `<a href="${waLink(p?.name||'', p?.price_sale||'')}" target="_blank" class="btn-order" onclick="event.stopPropagation()">📱 Pedir por WhatsApp</a>`;
+  } else {
+    btn.outerHTML = `<span class="btn-order disabled">Sin stock</span>`;
+  }
+}
+
+/* ── Toast ────────────────────────────────────────────────────────────── */
+let toastTimer;
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 3800);
+}
+
+/* ── Modal ────────────────────────────────────────────────────────────── */
+function openModal(p) {
+  const emoji  = CAT_EMOJI[p.category] || '✦';
+  const rating = RATINGS[p.sku] || '★★★★★ (12)';
+  const ref    = refPrice(p.price_sale);
+  const disc   = discPct(p.price_sale, ref);
+  const tags   = (p.keywords || []).slice(0, 6);
+  document.getElementById('modal-content').innerHTML = `
+    <div class="modal-emoji">${p.image_url
+      ? `<img src="${p.image_url}" alt="${p.name}" style="width:100%;border-radius:2px;margin-bottom:8px">`
+      : emoji}</div>
+    <div class="modal-cat">${p.category.replace('_',' ')}</div>
+    <div class="modal-name">${p.name}</div>
+    <div class="modal-stars">${rating.split(' ')[0]} <span style="font-size:.70rem;color:var(--white-mute)">${rating.split(' ')[1]||''} reseñas</span></div>
+    <div class="modal-desc">${p.description || ''}</div>
+    <div class="modal-price-row">
+      <span class="modal-price">S/. ${Number(p.price_sale).toFixed(2)}</span>
+      <span class="modal-orig">S/. ${ref.toFixed(2)}</span>
+      <span class="modal-save">Ahorra ${disc}%</span>
+    </div>
+    ${tags.length ? `<div class="modal-tags">${tags.map(t=>`<span class="modal-tag">${t}</span>`).join('')}</div>` : ''}
+    <div style="margin-bottom:14px">${stockBadge(p.stock)}</div>
+    ${p.stock > 0
+      ? `<a href="${waLink(p.name, Number(p.price_sale).toFixed(2))}" target="_blank" class="modal-btn">📱 Pedir por WhatsApp</a>`
+      : `<div class="modal-btn" style="background:rgba(255,255,255,0.05);cursor:not-allowed;color:var(--white-mute)">Sin stock actualmente</div>`}`;
+  document.getElementById('modal').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeModal() {
+  document.getElementById('modal').classList.remove('open');
+  document.body.style.overflow = '';
+}
+document.getElementById('modal-close').addEventListener('click', closeModal);
+document.getElementById('modal').addEventListener('click', e => { if (e.target === document.getElementById('modal')) closeModal(); });
+
+/* ── Card click → modal ───────────────────────────────────────────────── */
+document.getElementById('grid').addEventListener('click', e => {
+  const card = e.target.closest('.card');
+  if (!card) return;
+  const p = allProducts.find(x => x.id === card.dataset.id);
+  if (p) openModal(p);
+});
+
+/* ── Category tabs ────────────────────────────────────────────────────── */
+document.getElementById('tabs').addEventListener('click', e => {
+  const btn = e.target.closest('.tab');
+  if (!btn) return;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  activeCategory = btn.dataset.cat;
+  renderGrid();
+});
+
+/* ── FAQ accordion ────────────────────────────────────────────────────── */
+document.querySelector('.faq-list').addEventListener('click', e => {
+  const item = e.target.closest('.faq-item');
+  if (!item) return;
+  const isOpen = item.classList.contains('open');
+  document.querySelectorAll('.faq-item').forEach(i => i.classList.remove('open'));
+  if (!isOpen) item.classList.add('open');
+});
+
+/* ── Load products ────────────────────────────────────────────────────── */
+async function loadProducts() {
+  const { data, error } = await db.from('hinode_products_public').select('*').order('category').order('name');
+  if (error) {
+    document.getElementById('grid').innerHTML = `<div class="empty">Error al cargar. Recarga la página.</div>`;
+    console.error(error); return;
+  }
+  allProducts = data || [];
+  renderGrid();
+  observeAll();
+}
+
+/* ── Realtime ─────────────────────────────────────────────────────────── */
+function subscribeRealtime() {
+  db.channel('hinode-stock')
+    .on('postgres_changes', { event:'UPDATE', schema:'public', table:'hinode_products' }, payload => {
+      const { id, stock, name } = payload.new;
+      updateProductStock(id, stock);
+      if (stock > 0 && stock < 5)  showToast(`⚠ Últimas ${stock} unidades de ${name}`);
+      else if (stock > 0 && stock < 10) showToast(`${name} — pocas unidades disponibles`);
+    })
+    .subscribe(status => {
+      document.getElementById('live-status').textContent =
+        status === 'SUBSCRIBED' ? 'Stock en tiempo real' : 'Tienda online';
+    });
+}
+
+/* ── FOMO toasts ──────────────────────────────────────────────────────── */
+const fomoMsgs = [
+  '✦ Alguien acaba de pedir una fragancia',
+  '✦ Nueva clienta del sérum antienvejecimiento',
+  '✦ Kit Bienvenida muy solicitado hoy',
+  '✦ Esplêndida Rose — favorito de la semana',
+  '✦ 3 pedidos en la última hora',
+  '✦ Clienta de Miraflores acaba de comprar',
+  '✦ Fragancia masculina — el más pedido esta semana',
+];
+let fi = 0;
+
+/* ── Init ─────────────────────────────────────────────────────────────── */
+(async () => {
+  await loadProducts();
+  subscribeRealtime();
+  setTimeout(() => {
+    showToast(fomoMsgs[fi++ % fomoMsgs.length]);
+    setInterval(() => showToast(fomoMsgs[fi++ % fomoMsgs.length]), 28000);
+  }, 9000);
+})();
+</script>
+</body>
+</html>

@@ -122,8 +122,16 @@ CREATE INDEX IF NOT EXISTS idx_hinode_conv_active
   ON hinode_conversations (store_id, bot_paused, last_activity_at)
   WHERE bot_paused = false;
 
--- ── 5. Triggers updated_at ───────────────────────────────────────────────────
--- Reutiliza la función update_updated_at() creada en migraciones anteriores.
+-- ── 5. Función + Triggers updated_at ─────────────────────────────────────────
+-- Proyecto nuevo: la función no existe, la creamos aquí.
+CREATE OR REPLACE FUNCTION update_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
 CREATE TRIGGER trg_hinode_stores_updated
   BEFORE UPDATE ON hinode_stores
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();

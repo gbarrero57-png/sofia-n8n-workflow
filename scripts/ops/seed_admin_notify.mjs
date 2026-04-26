@@ -20,12 +20,12 @@ const CLINIC_PHONES = {
   // '6a9f25e2-xxxx': '+51888000000',                        // SmilePlus → owner
 };
 
-// SIDs Round 5 — 2026-04-26
+// SIDs Round 7 — 2026-04-26 (es_ES language, text-only, 4/3/3 vars)
 const TEMPLATE_SIDS = {
-  twilio_admin_new_appt_sid:    'HXc72bba25e2d23fd4214fe51c00fee1fd',  // T12 cita_admin_nueva_r5 (3 vars, quick-reply)
-  twilio_patient_confirmed_sid: 'HXc5366dabdcc7b19ff8fad7fa3c2d9db2',  // T13 cita_pac_confirm_r5 (2 vars, text)
-  twilio_patient_cancelled_sid: 'HXea157b1ec5a297fc30dd26d018790424',  // T14 cita_pac_cancel_r5 (2 vars, text)
-  twilio_debt_reminder_sid:     'HXf490c093266e014e940f567fab0bd5ac',  // T15 sofia_recordatorio_deuda_v1 (3 vars, text)
+  twilio_admin_new_appt_sid:    'HX1d1f14d0705bb97a02ff6a21b71ef3c1',  // T12 sofia_notif_cita_r7 (4 vars, text)
+  twilio_patient_confirmed_sid: 'HX7057b0cc825f0385067bcb0fffdd449e',  // T13 sofia_cita_ok_r7 (3 vars, text)
+  twilio_patient_cancelled_sid: 'HX95a4d46225f94494a049049b42e4223f',  // T14 sofia_cita_cancel_r7 (3 vars, text)
+  twilio_debt_reminder_sid:     'HXf490c093266e014e940f567fab0bd5ac',  // T15 sofia_recordatorio_deuda_v1
 };
 
 async function get(path) {

@@ -10,7 +10,7 @@
  */
 
 const ACCOUNT_SID = 'AC4080780a4b4a7d8e7b107a39f01abad3';
-const AUTH_TOKEN  = '3151687eb79db7a281651d7e1670c0b6';
+const AUTH_TOKEN  = '310d11c181fa818864175346ccb3f948';
 const BASE_AUTH   = Buffer.from(`${ACCOUNT_SID}:${AUTH_TOKEN}`).toString('base64');
 
 async function twilioPost(body) {

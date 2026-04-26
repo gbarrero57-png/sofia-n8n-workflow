@@ -424,7 +424,7 @@ BEGIN
     -- Alerta de alergias: mostrar las más graves
     SELECT
         string_agg(
-            UPPER(a.severity) || ': ' || a.allergen
+            UPPER(a.severity::TEXT) || ': ' || a.allergen
             || CASE WHEN a.reaction IS NOT NULL THEN ' (' || a.reaction || ')' ELSE '' END,
             ' | '
             ORDER BY

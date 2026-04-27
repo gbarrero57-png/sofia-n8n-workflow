@@ -53,3 +53,5 @@ supabase/.temp/
 
 ### Favicons (binary assets)
 favicons/
+
+.vercel

@@ -1,0 +1,47 @@
+{
+  "name": "SofIA - NPS Post-Cita",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 30
+            }
+          ]
+        }
+      },
+      "name": "Cron 30min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0],
+      "id": "b2c3d4e5-0002-0002-0002-000000000001"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Send NPS survey to patients 1-4 hours after appointment completion\nconst SUPABASE_URL   = 'https://inhyrrjidhzrbqecnptn.supabase.co';\nconst SERVICE_KEY    = $env.N8N_SUPABASE_SERVICE_KEY;\nconst CHATWOOT_URL   = 'https://chat.redsolucionesti.com';\nconst CHATWOOT_TOKEN = 'yypAwZDH2dV3crfbqJqWCgj1';\n\nconst hdrs = { 'apikey': SERVICE_KEY, 'Authorization': 'Bearer ' + SERVICE_KEY };\n\n// 1. Get all active clinics\nconst clinics = await this.helpers.httpRequest({\n    method: 'GET',\n    url: SUPABASE_URL + '/rest/v1/clinics?select=id,name,chatwoot_account_id&deleted_at=is.null',\n    headers: hdrs, json: true\n});\n\nif (!Array.isArray(clinics) || clinics.length === 0) {\n    return [{ json: { processed: 0 } }];\n}\n\nlet totalSent = 0;\nconst results = [];\n\nfor (const clinic of clinics) {\n    const accountId = clinic.chatwoot_account_id || 2;\n\n    // 2. Get appointments completed 1-4 hours ago that need NPS\n    let appointments = [];\n    try {\n        appointments = await this.helpers.httpRequest({\n            method: 'POST',\n            url: SUPABASE_URL + '/rest/v1/rpc/get_appointments_for_nps',\n            headers: { ...hdrs, 'Content-Type': 'application/json' },\n            body: { p_clinic_id: clinic.id },\n            json: true\n        });\n    } catch (e) { appointments = []; }\n\n    if (!Array.isArray(appointments) || appointments.length === 0) continue;\n\n    for (const appt of appointments) {\n        // 3. The appointment already has conversation_id from the appointments table\n        // Look it up directly\n        let convId = null;\n        try {\n            const apptData = await this.helpers.httpRequest({\n                method: 'GET',\n                url: SUPABASE_URL + '/rest/v1/appointments?select=conversation_id&id=eq.' + appt.id\n                    + '&conversation_id=not.is.null',\n                headers: hdrs, json: true\n            });\n            if (Array.isArray(apptData) && apptData.length > 0) {\n                convId = apptData[0].conversation_id;\n            }\n        } catch (e) { /* skip */ }\n\n        if (!convId) continue;\n\n        const firstName   = (appt.patient_name || 'paciente').split(' ')[0];\n        const serviceName = appt.service || 'su consulta';\n\n        const msg = [\n            'Hola *' + firstName + '*, gracias por visitarnos en *' + clinic.name + '* 😊',\n            '',\n            '¿Cómo calificarías tu experiencia con *' + serviceName + '*?',\n            '',\n            'Por favor responde con un número del *1 al 5*:',\n            '1 ⭐ — Muy malo',\n            '2 ⭐⭐ — Malo',\n            '3 ⭐⭐⭐ — Regular',\n            '4 ⭐⭐⭐⭐ — Bueno',\n            '5 ⭐⭐⭐⭐⭐ — Excelente',\n            '',\n            '_Tu opinión nos ayuda a mejorar. ¡Gracias! 🙏_'\n        ].join('\\n');\n\n        // 4. Send NPS message via Chatwoot\n        try {\n            await this.helpers.httpRequest({\n                method: 'POST',\n                url: CHATWOOT_URL + '/api/v1/accounts/' + accountId + '/conversations/' + convId + '/messages',\n                headers: { 'api_access_token': CHATWOOT_TOKEN, 'Content-Type': 'application/json' },\n                body: { content: msg, message_type: 'outgoing', private: false },\n                json: true\n            });\n        } catch (e) {\n            results.push({ appointment_id: appt.id, error: String(e.message) });\n            continue;\n        }\n\n        // 5. Mark nps_sent = true directly in Supabase\n        try {\n            await this.helpers.httpRequest({\n                method: 'PATCH',\n                url: SUPABASE_URL + '/rest/v1/appointments?id=eq.' + appt.id,\n                headers: { ...hdrs, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },\n                body: { nps_sent: true, nps_sent_at: new Date().toISOString() },\n                json: true\n            });\n        } catch (e) { /* non-critical */ }\n\n        totalSent++;\n        results.push({ appointment_id: appt.id, patient: appt.patient_name, clinic: clinic.name, sent: true });\n    }\n}\n\nreturn [{ json: { processed: totalSent, results } }];"
+      },
+      "name": "Send NPS Surveys",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0],
+      "id": "b2c3d4e5-0002-0002-0002-000000000002"
+    }
+  ],
+  "connections": {
+    "Cron 30min": {
+      "main": [[{ "node": "Send NPS Surveys", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "staticData": null,
+  "meta": null,
+  "pinData": null,
+  "tags": []
+}

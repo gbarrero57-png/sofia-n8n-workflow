@@ -4,27 +4,58 @@
     "subdomain": "sanmarcos",
     "phone": "+51912345678",
     "address": "Av. Universitaria 1234, San Miguel, Lima",
-    "timezone": "America/Lima",
-    "bot_config": {
-      "max_bot_interactions": 3,
-      "business_hours_start": 8,
-      "business_hours_end": 22,
-      "reminder_hours_before": 24,
-      "welcome_message": "Hola 👋 Soy SofIA, la asistente virtual de Clínica Dental San Marcos. ¿En qué puedo ayudarte hoy?",
-      "escalation_message": "Entiendo, déjame conectarte con uno de nuestros asesores. Un momento por favor 🙏"
-    },
-    "branding_config": {
-      "primary_color": "#7c3aed",
-      "logo_url": "",
-      "whatsapp_number": "+51912345678"
-    }
+    "timezone": "America/Lima"
   },
+
+  "whatsapp": {
+    "phone_number":       "+51912345678",
+    "phone_number_id":    "PHONE_NUMBER_ID_FROM_META",
+    "waba_id":            "WABA_ID_FROM_META",
+    "system_user_token":  "EAAxxxxxxxxxxxxxxx"
+  },
+
+  "chatwoot_inbox_name": "SofIA - San Marcos",
+
+  "business_hours": { "start": 8, "end": 20 },
+  "slot_duration_minutes": 30,
+  "slots_per_day": 6,
+  "max_bot_interactions": 15,
+  "reminder_hours_before": 24,
+
+  "ctwa_rules": [
+    {
+      "source_id": "limpieza_promo",
+      "headline":  "50% dcto en limpieza dental",
+      "response":  "¡Hola! Vi que te interesó nuestra promo de limpieza dental.\n\n*Limpieza + Fluorización + Radiografía* por solo *S/. 45* (precio normal S/. 90) 🦷\n\n¿Quieres agendar tu cita esta semana? Tenemos disponibilidad inmediata."
+    },
+    {
+      "source_id": "implantes_ad",
+      "headline":  "Implantes dentales desde S/. 2,800",
+      "response":  "¡Hola! Te interesaron nuestros implantes dentales.\n\nOfrecemos implantes con *garantía de por vida* y financiamiento en *12 cuotas sin intereses* 💳\n\nEl primer paso es una *consulta diagnóstica gratuita* con el especialista. ¿Cuándo te queda bien?"
+    },
+    {
+      "source_id": "ortodoncia_ad",
+      "headline":  "Brackets desde S/. 2,500",
+      "response":  "¡Hola! Te llega la info sobre ortodoncia 😊\n\nTenemos *brackets metálicos desde S/. 2,500* y *alineadores transparentes desde S/. 4,500*, con cuotas mensuales cómodas.\n\nIncluye *consulta de valoración gratuita*. ¿Te gustaría agendar la tuya?"
+    }
+  ],
+
+  "welcome_message": "Hola 👋 Soy *SofIA*, asistente virtual de *Clínica Dental San Marcos*. ¿En qué te puedo ayudar hoy?",
+  "escalation_message": "Entiendo, déjame conectarte con uno de nuestros asesores. Un momento por favor 🙏",
+
+  "branding_config": {
+    "primary_color": "#7c3aed",
+    "logo_url": "",
+    "whatsapp_number": "+51912345678"
+  },
+
   "admin": {
     "email": "admin@clinicasanmarcos.com",
     "password": "CambiarEsto2024!",
     "full_name": "Dr. Carlos García"
   },
-  "chatwoot": {
+
+  "_chatwoot_legacy": {
     "account_id": 2,
     "inbox_name": "SofIA - San Marcos",
     "webhook_url": "https://workflows.n8n.redsolucionesti.com/webhook/chatwoot-sofia"

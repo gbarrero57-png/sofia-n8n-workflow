@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>SofIA — Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f1117;--surface:#1a1d27;--card:#20243a;--border:#2e3251;
+  --accent:#6c63ff;--accent2:#00d4aa;--red:#ff5370;--yellow:#ffcb6b;
+  --text:#e8eaf6;--muted:#8892b0;--font:'Inter',system-ui,sans-serif;
+}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh}
+
+/* ── LOGIN ── */
+#login-screen{display:flex;align-items:center;justify-content:center;min-height:100vh}
+.login-box{background:var(--surface);border:1px solid var(--border);border-radius:16px;
+  padding:40px;width:360px;text-align:center}
+.login-box h1{font-size:1.6rem;margin-bottom:4px}
+.login-box p{color:var(--muted);font-size:.9rem;margin-bottom:28px}
+.login-box input{width:100%;padding:11px 14px;border:1px solid var(--border);
+  background:var(--card);color:var(--text);border-radius:8px;font-size:.95rem;margin-bottom:12px}
+.login-box input:focus{outline:none;border-color:var(--accent)}
+.btn-primary{width:100%;padding:12px;background:var(--accent);color:#fff;
+  border:none;border-radius:8px;font-size:1rem;font-weight:600;cursor:pointer}
+.btn-primary:hover{opacity:.9}
+#login-err{color:var(--red);font-size:.85rem;margin-top:10px;min-height:20px}
+
+/* ── APP ── */
+#app{display:none}
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);
+  padding:14px 24px;display:flex;align-items:center;gap:16px}
+.topbar h1{font-size:1.15rem;font-weight:700;flex:1}
+.clinic-badge{background:var(--card);border:1px solid var(--border);
+  border-radius:20px;padding:5px 14px;font-size:.82rem;color:var(--muted)}
+.period-sel{display:flex;gap:6px}
+.period-btn{padding:5px 14px;border:1px solid var(--border);border-radius:20px;
+  background:transparent;color:var(--muted);font-size:.82rem;cursor:pointer}
+.period-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.btn-logout{padding:5px 14px;background:transparent;border:1px solid var(--border);
+  color:var(--muted);border-radius:20px;font-size:.82rem;cursor:pointer}
+.btn-logout:hover{border-color:var(--red);color:var(--red)}
+
+.tabs{display:flex;gap:0;border-bottom:1px solid var(--border);padding:0 24px;
+  background:var(--surface)}
+.tab{padding:12px 20px;cursor:pointer;font-size:.9rem;color:var(--muted);
+  border-bottom:2px solid transparent;transition:.2s}
+.tab.active{color:var(--text);border-bottom-color:var(--accent)}
+.tab:hover:not(.active){color:var(--text)}
+
+.main{padding:24px;max-width:1200px;margin:0 auto}
+
+/* ── CARDS ── */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:16px;margin-bottom:24px}
+.kpi-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px}
+.kpi-label{font-size:.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px}
+.kpi-value{font-size:1.9rem;font-weight:700}
+.kpi-sub{font-size:.8rem;color:var(--muted);margin-top:4px}
+.kpi-up{color:var(--accent2)}
+.kpi-down{color:var(--red)}
+.kpi-neutral{color:var(--yellow)}
+
+/* ── CHARTS ── */
+.chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px}
+.chart-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px}
+.chart-card h3{font-size:.9rem;color:var(--muted);margin-bottom:16px}
+.chart-card canvas{max-height:220px}
+@media(max-width:720px){.chart-grid{grid-template-columns:1fr}}
+
+/* ── TABLES ── */
+.table-card{background:var(--card);border:1px solid var(--border);border-radius:12px;
+  padding:20px;margin-bottom:16px}
+.table-card h3{font-size:.9rem;color:var(--muted);margin-bottom:14px}
+table{width:100%;border-collapse:collapse;font-size:.88rem}
+th{text-align:left;color:var(--muted);font-weight:500;padding:6px 12px;
+  border-bottom:1px solid var(--border)}
+td{padding:8px 12px;border-bottom:1px solid var(--border)}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(108,99,255,.06)}
+
+/* ── FUNNEL ── */
+.funnel-row{display:flex;align-items:center;gap:12px;padding:8px 0;
+  border-bottom:1px solid var(--border)}
+.funnel-row:last-child{border-bottom:none}
+.funnel-stage{width:160px;font-size:.85rem;text-transform:capitalize}
+.funnel-bar-wrap{flex:1;height:20px;background:var(--surface);border-radius:10px;overflow:hidden}
+.funnel-bar{height:100%;background:var(--accent);border-radius:10px;transition:.4s}
+.funnel-count{width:70px;text-align:right;font-size:.85rem;font-weight:600}
+.funnel-pct{width:55px;text-align:right;color:var(--muted);font-size:.8rem}
+.funnel-arrow{width:60px;text-align:right;color:var(--accent2);font-size:.8rem}
+
+/* ── LOADING / EMPTY ── */
+.loading{color:var(--muted);font-size:.9rem;padding:40px;text-align:center}
+.tag{display:inline-block;background:rgba(108,99,255,.15);color:var(--accent);
+  border-radius:6px;padding:2px 8px;font-size:.78rem;margin:2px}
+</style>
+</head>
+<body>
+
+<!-- ── LOGIN ────────────────────────────────────────────────────────── -->
+<div id="login-screen">
+  <div class="login-box">
+    <h1>SofIA</h1>
+    <p>Dashboard de clínica</p>
+    <input id="inp-email" type="email" placeholder="Email"/>
+    <input id="inp-pass"  type="password" placeholder="Contraseña"/>
+    <button class="btn-primary" id="btn-login">Entrar</button>
+    <div id="login-err"></div>
+  </div>
+</div>
+
+<!-- ── APP ──────────────────────────────────────────────────────────── -->
+<div id="app">
+  <div class="topbar">
+    <h1>SofIA Dashboard</h1>
+    <span class="clinic-badge" id="clinic-name">—</span>
+    <div class="period-sel">
+      <button class="period-btn" data-d="7">7d</button>
+      <button class="period-btn active" data-d="30">30d</button>
+      <button class="period-btn" data-d="90">90d</button>
+    </div>
+    <button class="btn-logout" id="btn-logout">Salir</button>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="resumen">Resumen</div>
+    <div class="tab" data-tab="prospectos">Prospectos</div>
+    <div class="tab" data-tab="cobros">Cobros</div>
+    <div class="tab" data-tab="bot">Bot</div>
+  </div>
+
+  <div class="main">
+    <!-- Resumen -->
+    <div id="tab-resumen">
+      <div class="kpi-grid" id="kpi-grid"><div class="loading">Cargando...</div></div>
+      <div class="chart-grid">
+        <div class="chart-card">
+          <h3>Pipeline de pacientes</h3>
+          <canvas id="chart-pipeline"></canvas>
+        </div>
+        <div class="chart-card">
+          <h3>Leads por día</h3>
+          <canvas id="chart-timeline-mini"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Prospectos -->
+    <div id="tab-prospectos" style="display:none">
+      <div class="kpi-grid" id="prosp-kpis"></div>
+      <div class="table-card">
+        <h3>Embudo de conversión</h3>
+        <div id="funnel-rows"><div class="loading">Cargando...</div></div>
+      </div>
+      <div class="chart-card">
+        <h3>Leads nuevos por día</h3>
+        <canvas id="chart-timeline" style="max-height:260px"></canvas>
+      </div>
+    </div>
+
+    <!-- Cobros -->
+    <div id="tab-cobros" style="display:none">
+      <div class="kpi-grid" id="cobros-kpis"><div class="loading">Cargando...</div></div>
+    </div>
+
+    <!-- Bot -->
+    <div id="tab-bot" style="display:none">
+      <div class="kpi-grid" id="bot-kpis"><div class="loading">Cargando...</div></div>
+      <div class="table-card" id="bot-intents-card" style="display:none">
+        <h3>Top intents detectados</h3>
+        <table><thead><tr><th>Intent</th><th>Mensajes</th></tr></thead>
+        <tbody id="bot-intents-body"></tbody></table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SUPA_URL  = 'https://inhyrrjidhzrbqecnptn.supabase.co';
+const SUPA_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImluaHlycmppZGh6cmJxZWNucHRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEwMDc1NzUsImV4cCI6MjA4NjU4MzU3NX0.pd_KbMPtoWpdtue_apOeHOG8sY4NqJ7QpfJgsa7uTd0';
+const { createClient } = supabase;
+const db = createClient(SUPA_URL, SUPA_ANON);
+
+let clinicId   = null;
+let clinicName = '';
+let days       = 30;
+let charts     = {};
+
+// ── Auth ──────────────────────────────────────────────────────────────────────
+document.getElementById('btn-login').addEventListener('click', async () => {
+  const email = document.getElementById('inp-email').value.trim();
+  const pass  = document.getElementById('inp-pass').value;
+  document.getElementById('login-err').textContent = '';
+  const { error } = await db.auth.signInWithPassword({ email, password: pass });
+  if (error) { document.getElementById('login-err').textContent = error.message; return; }
+  await initApp();
+});
+
+document.getElementById('inp-pass').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('btn-login').click();
+});
+
+document.getElementById('btn-logout').addEventListener('click', async () => {
+  await db.auth.signOut();
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+});
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+async function initApp() {
+  const { data: { user } } = await db.auth.getUser();
+  if (!user) return;
+
+  // Get staff record → clinic
+  const { data: staff } = await db.from('staff').select('clinic_id, clinics(name)')
+    .eq('user_id', user.id).limit(1).single();
+
+  if (!staff) { document.getElementById('login-err').textContent = 'Sin acceso a ninguna clínica.'; return; }
+
+  clinicId   = staff.clinic_id;
+  clinicName = staff.clinics?.name || 'Mi Clínica';
+  document.getElementById('clinic-name').textContent = clinicName;
+
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+
+  loadAll();
+}
+
+// ── Period selector ───────────────────────────────────────────────────────────
+document.querySelectorAll('.period-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    days = parseInt(btn.dataset.d);
+    loadAll();
+  });
+});
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    ['resumen','prospectos','cobros','bot'].forEach(id =>
+      document.getElementById('tab-' + id).style.display = 'none');
+    document.getElementById('tab-' + tab.dataset.tab).style.display = 'block';
+  });
+});
+
+// ── Load all ──────────────────────────────────────────────────────────────────
+function loadAll() {
+  loadResumen();
+  loadProspectos();
+  loadCobros();
+  loadBot();
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function fmt(n, decimals = 0) {
+  if (n == null) return '—';
+  return Number(n).toLocaleString('es-PE', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+}
+function kpi(label, value, sub = '', cls = '') {
+  return `<div class="kpi-card">
+    <div class="kpi-label">${label}</div>
+    <div class="kpi-value ${cls}">${value}</div>
+    ${sub ? `<div class="kpi-sub">${sub}</div>` : ''}
+  </div>`;
+}
+function destroyChart(id) { if (charts[id]) { charts[id].destroy(); delete charts[id]; } }
+
+// ── Resumen ───────────────────────────────────────────────────────────────────
+async function loadResumen() {
+  document.getElementById('kpi-grid').innerHTML = '<div class="loading">Cargando...</div>';
+  const { data, error } = await db.rpc('get_clinic_dashboard', { p_clinic_id: clinicId, p_days: days });
+  if (error || !data) { document.getElementById('kpi-grid').innerHTML = '<div class="loading">Error al cargar</div>'; return; }
+
+  const d = data;
+  const npsColor = d.nps.avg_score >= 4 ? 'kpi-up' : d.nps.avg_score >= 3 ? 'kpi-neutral' : 'kpi-down';
+  const convColor = d.leads.conversion_pct >= 30 ? 'kpi-up' : d.leads.conversion_pct >= 10 ? 'kpi-neutral' : 'kpi-down';
+
+  document.getElementById('kpi-grid').innerHTML =
+    kpi('Leads nuevos', fmt(d.leads.new), `${fmt(d.leads.ctwa)} CTWA · ${fmt(d.leads.organic)} organic`) +
+    kpi('Citas completadas', fmt(d.appointments.completed), `${fmt(d.appointments.show_rate_pct)}% show rate`, 'kpi-up') +
+    kpi('Conversión lead→cita', fmt(d.leads.conversion_pct) + '%', '', convColor) +
+    kpi('NPS promedio', d.nps.avg_score ? fmt(d.nps.avg_score, 1) + ' / 5' : '—',
+        d.nps.responses ? `${fmt(d.nps.responses)} respuestas · índice ${fmt(d.nps.index)}%` : 'Sin respuestas', npsColor) +
+    kpi('Ingresos cobrados', 'S/. ' + fmt(d.revenue.collected, 2), `últimos ${days} días`, 'kpi-up');
+
+  // Pipeline chart
+  const snap = d.pipeline_snapshot || {};
+  const stages = ['nuevo','contactado','cita_agendada','cita_confirmada','presupuesto_enviado','ganado','perdido'];
+  const labels = stages.map(s => s.replace('_',' '));
+  const values = stages.map(s => snap[s] || 0);
+  const colors = ['#8892b0','#6c63ff','#00d4aa','#00d4aa','#ffcb6b','#c3e88d','#ff5370'];
+
+  destroyChart('pipeline');
+  charts['pipeline'] = new Chart(document.getElementById('chart-pipeline'), {
+    type: 'bar',
+    data: { labels, datasets: [{ data: values, backgroundColor: colors, borderRadius: 6 }] },
+    options: { plugins: { legend: { display: false } }, scales: {
+      x: { ticks: { color: '#8892b0', font: { size: 10 } }, grid: { color: '#2e3251' } },
+      y: { ticks: { color: '#8892b0' }, grid: { color: '#2e3251' } }
+    }}
+  });
+
+  // Timeline mini — load timeline data
+  const { data: tl } = await db.rpc('get_leads_timeline', { p_clinic_id: clinicId, p_days: days });
+  if (tl) renderTimelineMini(tl);
+}
+
+function renderTimelineMini(tl) {
+  destroyChart('timeline-mini');
+  charts['timeline-mini'] = new Chart(document.getElementById('chart-timeline-mini'), {
+    type: 'line',
+    data: {
+      labels: tl.map(r => r.day.slice(5)),
+      datasets: [
+        { label: 'Total', data: tl.map(r => r.leads_total), borderColor: '#6c63ff',
+          backgroundColor: 'rgba(108,99,255,.15)', fill: true, tension: .3, pointRadius: 2 },
+        { label: 'CTWA',  data: tl.map(r => r.leads_ctwa),  borderColor: '#00d4aa',
+          backgroundColor: 'transparent', tension: .3, pointRadius: 2 }
+      ]
+    },
+    options: { plugins: { legend: { labels: { color: '#8892b0', boxWidth: 12, font: { size: 11 } } } },
+      scales: {
+        x: { ticks: { color: '#8892b0', maxTicksLimit: 8, font: { size: 10 } }, grid: { color: '#2e3251' } },
+        y: { ticks: { color: '#8892b0' }, grid: { color: '#2e3251' } }
+      }}
+  });
+}
+
+// ── Prospectos ────────────────────────────────────────────────────────────────
+async function loadProspectos() {
+  const [funnelRes, tlRes] = await Promise.all([
+    db.rpc('get_conversion_funnel', { p_clinic_id: clinicId, p_days: days }),
+    db.rpc('get_leads_timeline',    { p_clinic_id: clinicId, p_days: days })
+  ]);
+
+  // Funnel
+  if (funnelRes.data) {
+    const rows = funnelRes.data.filter(r => r.count > 0 || ['nuevo','contactado'].includes(r.stage));
+    const maxCount = Math.max(...rows.map(r => r.count), 1);
+    const stageColors = { nuevo:'#8892b0',contactado:'#6c63ff',cita_agendada:'#00d4aa',
+      cita_confirmada:'#00d4aa',presupuesto_enviado:'#ffcb6b',ganado:'#c3e88d',perdido:'#ff5370' };
+
+    document.getElementById('funnel-rows').innerHTML = rows.map(r => `
+      <div class="funnel-row">
+        <div class="funnel-stage">${r.stage.replace(/_/g,' ')}</div>
+        <div class="funnel-bar-wrap">
+          <div class="funnel-bar" style="width:${Math.round(r.count/maxCount*100)}%;background:${stageColors[r.stage]||'#6c63ff'}"></div>
+        </div>
+        <div class="funnel-count">${fmt(r.count)}</div>
+        <div class="funnel-pct">${r.pct_of_entry != null ? r.pct_of_entry + '%' : ''}</div>
+        <div class="funnel-arrow">${r.conversion_next != null ? '→ ' + r.conversion_next + '%' : ''}</div>
+      </div>`).join('');
+
+    // KPIs
+    const ganado = funnelRes.data.find(r => r.stage === 'ganado') || {};
+    const total  = funnelRes.data.reduce((s, r) => s + (r.count || 0), 0);
+    document.getElementById('prosp-kpis').innerHTML =
+      kpi('Total pacientes', fmt(total), `últimos ${days} días`) +
+      kpi('Ganados', fmt(ganado.count), ganado.pct_of_entry + '% del total', 'kpi-up');
+  }
+
+  // Timeline chart
+  if (tlRes.data) {
+    destroyChart('timeline');
+    charts['timeline'] = new Chart(document.getElementById('chart-timeline'), {
+      type: 'line',
+      data: {
+        labels: tlRes.data.map(r => r.day.slice(5)),
+        datasets: [
+          { label: 'Leads total',  data: tlRes.data.map(r => r.leads_total),  borderColor: '#6c63ff', backgroundColor: 'rgba(108,99,255,.1)', fill: true, tension: .3, pointRadius: 2 },
+          { label: 'CTWA',         data: tlRes.data.map(r => r.leads_ctwa),   borderColor: '#00d4aa', backgroundColor: 'transparent', tension: .3, pointRadius: 2 },
+          { label: 'Citas nuevas', data: tlRes.data.map(r => r.appts_created),borderColor: '#ffcb6b', backgroundColor: 'transparent', tension: .3, pointRadius: 2, borderDash: [4,4] }
+        ]
+      },
+      options: { plugins: { legend: { labels: { color: '#8892b0', boxWidth: 12, font: { size: 11 } } } },
+        scales: {
+          x: { ticks: { color: '#8892b0', maxTicksLimit: 10, font: { size: 10 } }, grid: { color: '#2e3251' } },
+          y: { ticks: { color: '#8892b0' }, grid: { color: '#2e3251' } }
+        }}
+    });
+  }
+}
+
+// ── Cobros ────────────────────────────────────────────────────────────────────
+async function loadCobros() {
+  document.getElementById('cobros-kpis').innerHTML = '<div class="loading">Cargando...</div>';
+  const { data, error } = await db.rpc('get_revenue_metrics', { p_clinic_id: clinicId, p_days: days });
+  if (error || !data || !data[0]) {
+    document.getElementById('cobros-kpis').innerHTML = '<div class="loading">Sin datos de cobros</div>';
+    return;
+  }
+  const r = data[0];
+  const rateColor = r.collection_rate >= 80 ? 'kpi-up' : r.collection_rate >= 50 ? 'kpi-neutral' : 'kpi-down';
+  document.getElementById('cobros-kpis').innerHTML =
+    kpi('Total cobrado',    'S/. ' + fmt(r.total_collected, 2), `${fmt(r.payments_count)} pagos`, 'kpi-up') +
+    kpi('Pendiente',        'S/. ' + fmt(r.total_pending, 2),   '', r.total_pending > 0 ? 'kpi-neutral' : '') +
+    kpi('Tasa de cobranza', fmt(r.collection_rate) + '%',       '', rateColor) +
+    kpi('Ticket promedio',  'S/. ' + fmt(r.avg_ticket, 2),      '') +
+    kpi('Pacientes pagadores', fmt(r.paying_patients),          '') +
+    kpi('LTV estimado',     'S/. ' + fmt(r.ltv_estimate, 2),    'por paciente pagador', 'kpi-up');
+}
+
+// ── Bot ───────────────────────────────────────────────────────────────────────
+async function loadBot() {
+  document.getElementById('bot-kpis').innerHTML = '<div class="loading">Cargando...</div>';
+  const { data, error } = await db.rpc('get_bot_performance', { p_clinic_id: clinicId, p_days: days });
+  if (error || !data || !data[0]) {
+    document.getElementById('bot-kpis').innerHTML = '<div class="loading">Sin datos del bot</div>';
+    return;
+  }
+  const r = data[0];
+  const botRate = r.total_conversations > 0
+    ? Math.round(r.bot_handled / r.total_conversations * 100) : 0;
+  document.getElementById('bot-kpis').innerHTML =
+    kpi('Conversaciones',   fmt(r.total_conversations), `últimos ${days} días`) +
+    kpi('Manejadas por bot',fmt(r.bot_handled),         botRate + '%', 'kpi-up') +
+    kpi('Escaladas a humano',fmt(r.human_escalated),    fmt(r.escalation_rate) + '%',
+        r.escalation_rate < 20 ? 'kpi-up' : r.escalation_rate < 40 ? 'kpi-neutral' : 'kpi-down') +
+    kpi('Slots ofrecidos',  fmt(r.slots_offered),       '') +
+    kpi('Citas confirmadas',fmt(r.slots_confirmed),     fmt(r.slot_confirm_rate) + '% confirm rate', 'kpi-up') +
+    kpi('Resp. promedio',   r.avg_response_ms ? fmt(r.avg_response_ms) + ' ms' : '—', '');
+
+  // Top intents
+  const intents = r.top_intents || {};
+  const entries = Object.entries(intents).sort((a,b) => b[1]-a[1]);
+  if (entries.length > 0) {
+    document.getElementById('bot-intents-card').style.display = 'block';
+    document.getElementById('bot-intents-body').innerHTML = entries.map(([intent, count]) =>
+      `<tr><td><span class="tag">${intent}</span></td><td>${fmt(count)}</td></tr>`
+    ).join('');
+  }
+}
+
+// ── Auto-login if session exists ──────────────────────────────────────────────
+(async () => {
+  const { data: { session } } = await db.auth.getSession();
+  if (session) await initApp();
+})();
+</script>
+</body>
+</html>

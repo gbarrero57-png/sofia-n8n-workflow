@@ -256,9 +256,9 @@ BEGIN
     FROM   patients p
     LEFT   JOIN LATERAL (
         SELECT a.id FROM appointments a
-        WHERE  a.clinic_id  = p_clinic_id
-          AND  a.phone      = p.phone
-          AND  a.deleted_at IS NULL
+        WHERE  a.clinic_id = p_clinic_id
+          AND  a.phone     = p.phone
+          AND  a.status   != 'cancelled'
         LIMIT 1
     ) a ON true
     WHERE  p.clinic_id  = p_clinic_id

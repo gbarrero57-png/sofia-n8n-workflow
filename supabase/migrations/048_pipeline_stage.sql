@@ -87,7 +87,7 @@ WHERE  p.deleted_at IS NULL
     SELECT 1 FROM public.appointments a
     WHERE a.clinic_id = p.clinic_id
       AND a.phone     = p.phone
-      AND a.status    IN ('scheduled', 'pending')
+      AND a.status    = 'scheduled'
   );
 
 -- Pacientes con conversaciones del bot → contactado (fuente whatsapp_bot)
@@ -126,7 +126,7 @@ BEGIN
   END IF;
 
   -- On appointment creation (scheduled) → cita_agendada if still nuevo/contactado
-  IF TG_OP = 'INSERT' AND NEW.status IN ('scheduled','pending','confirmed') THEN
+  IF TG_OP = 'INSERT' AND NEW.status IN ('scheduled','confirmed') THEN
     UPDATE patients
     SET    pipeline_stage = 'cita_agendada',
            updated_at     = now()

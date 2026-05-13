@@ -260,6 +260,93 @@ app.get('/inspect-cards', async (req, res) => {
   }
 })
 
+// ── GET /goto/:remateNum ───────────────────────────────
+// Auto-copia el número de remate y redirige a REMAJU
+app.get('/goto/:remateNum', (req, res) => {
+  const num = String(req.params.remateNum).replace(/[^0-9]/g, '')
+  if (!num) return res.status(400).send('Número inválido')
+
+  const remajuUrl = 'https://remaju.pj.gob.pe/remaju/pages/publico/remateExterno.xhtml'
+
+  res.setHeader('Content-Type', 'text/html; charset=utf-8')
+  res.send(`<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Remate Nº ${num} — REMAJU</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#0f172a;color:#f1f5f9;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
+  .card{background:#1e293b;border:1px solid #334155;border-radius:16px;padding:32px 28px;max-width:420px;width:100%;text-align:center}
+  .logo{font-size:40px;margin-bottom:12px}
+  h1{font-size:15px;color:#94a3b8;font-weight:500;letter-spacing:.5px;margin-bottom:20px}
+  .num{font-size:48px;font-weight:800;color:#38bdf8;letter-spacing:-1px;margin-bottom:8px;font-variant-numeric:tabular-nums}
+  .label{font-size:13px;color:#64748b;margin-bottom:28px}
+  .btn{display:block;width:100%;padding:14px 20px;border-radius:10px;font-size:15px;font-weight:600;text-decoration:none;cursor:pointer;border:none;margin-bottom:10px;transition:opacity .15s}
+  .btn-primary{background:#0ea5e9;color:#fff}
+  .btn-primary:hover{opacity:.85}
+  .btn-copy{background:#334155;color:#94a3b8}
+  .btn-copy:hover{opacity:.75}
+  .status{font-size:13px;color:#22c55e;margin-top:16px;min-height:20px}
+  .countdown{font-size:12px;color:#475569;margin-top:8px}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">🏛️</div>
+  <h1>REMATE JUDICIAL</h1>
+  <div class="num">${num}</div>
+  <div class="label">Número de remate</div>
+  <a href="${remajuUrl}" class="btn btn-primary" id="btnOpen" target="_blank">Abrir REMAJU</a>
+  <button class="btn btn-copy" id="btnCopy" onclick="copyNum()">Copiar número</button>
+  <div class="status" id="status"></div>
+  <div class="countdown" id="countdown"></div>
+</div>
+<script>
+  const NUM = '${num}'
+  const REMAJU = '${remajuUrl}'
+
+  function copyNum () {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(NUM).then(function() {
+        document.getElementById('status').textContent = '✓ Número copiado al portapapeles'
+        document.getElementById('btnCopy').textContent = '✓ Copiado'
+      }).catch(fallbackCopy)
+    } else { fallbackCopy() }
+  }
+
+  function fallbackCopy () {
+    var ta = document.createElement('textarea')
+    ta.value = NUM; ta.style.position = 'fixed'; ta.style.opacity = '0'
+    document.body.appendChild(ta); ta.select()
+    try { document.execCommand('copy'); document.getElementById('status').textContent = '✓ Número copiado' } catch(e) {}
+    document.body.removeChild(ta)
+  }
+
+  // Auto-copy on load
+  window.addEventListener('load', function () {
+    copyNum()
+    // Countdown to open REMAJU
+    var t = 3
+    var el = document.getElementById('countdown')
+    el.textContent = 'Abriendo REMAJU en ' + t + 's...'
+    var iv = setInterval(function () {
+      t--
+      if (t <= 0) {
+        clearInterval(iv)
+        el.textContent = 'Abriendo REMAJU...'
+        window.open(REMAJU, '_blank')
+      } else {
+        el.textContent = 'Abriendo REMAJU en ' + t + 's...'
+      }
+    }, 1000)
+  })
+</script>
+</body>
+</html>`)
+})
+
 // ── GET /diagnose-direct ───────────────────────────────
 // Igual que /diagnose pero SIN proxy (conexión directa desde VPS)
 app.get('/diagnose-direct', async (req, res) => {
@@ -468,7 +555,7 @@ app.listen(PORT, () => {
 const bot = createBot()
 if (bot) {
   logger.info('Iniciando bot Telegram SaaS...')
-  bot.launch()
+  bot.launch({ dropPendingUpdates: true })
     .catch(err => logger.error('Error iniciando bot', { error: err.message }))
 
   process.once('SIGTERM', () => bot.stop('SIGTERM'))

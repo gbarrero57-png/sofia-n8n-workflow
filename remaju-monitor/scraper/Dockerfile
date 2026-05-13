@@ -28,6 +28,7 @@ RUN mkdir -p /app/data
 COPY package.json .
 RUN npm install --omit=dev
 
+ARG CACHEBUST=2
 COPY src/ ./src/
 
 EXPOSE 3001

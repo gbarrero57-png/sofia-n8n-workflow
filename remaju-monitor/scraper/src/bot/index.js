@@ -167,9 +167,10 @@ function createBot () {
         return ctx.reply('No estás registrado. Usa /start para comenzar.')
       }
 
-      const f = user.remaju_filters?.[0]
+      const rawF = user.remaju_filters
+      const f = rawF ? (Array.isArray(rawF) ? rawF[0] : rawF) : null
       const filterInfo = f
-        ? `💰 Precio: <b>$${f.min_price_usd.toLocaleString()} – $${f.max_price_usd.toLocaleString()} USD</b>\n` +
+        ? `💰 Precio: <b>$${(f.min_price_usd || 0).toLocaleString()} – $${(f.max_price_usd || 90000).toLocaleString()} USD</b>\n` +
           `🏠 Tipos: ${(f.property_types || []).join(', ')}\n` +
           `📍 Distritos: ${f.districts?.length ? f.districts.join(', ') : 'Todos Lima'}`
         : 'Sin filtros configurados'
@@ -381,7 +382,11 @@ function createBot () {
         types = [...types, tipo]
       }
 
-      await sb.from('remaju_filters').upsert({ user_id: user.id, property_types: types }, { onConflict: 'user_id' })
+      const { error: upsertErr } = await sb.from('remaju_filters').upsert({ user_id: user.id, property_types: types }, { onConflict: 'user_id' })
+      if (upsertErr) {
+        logger.error('Error guardando tipo', { error: upsertErr.message })
+        return ctx.answerCbQuery('❌ Error guardando. Intenta de nuevo.')
+      }
 
       const options = [
         { key: 'casa',         label: '🏠 Casa' },
@@ -448,7 +453,11 @@ function createBot () {
         tiers = [...tiers, tier]
       }
 
-      await sb.from('remaju_filters').upsert({ user_id: user.id, tiers }, { onConflict: 'user_id' })
+      const { error: upsertErr } = await sb.from('remaju_filters').upsert({ user_id: user.id, tiers }, { onConflict: 'user_id' })
+      if (upsertErr) {
+        logger.error('Error guardando tiers', { error: upsertErr.message })
+        return ctx.answerCbQuery('❌ Error guardando. Intenta de nuevo.')
+      }
 
       const options = [
         { key: 'super_ganga', label: '🔴 Super Ganga  (< $40k)' },
@@ -526,7 +535,11 @@ function createBot () {
         districts = [...districts, distrito]
       }
 
-      await sb.from('remaju_filters').upsert({ user_id: user.id, districts }, { onConflict: 'user_id' })
+      const { error: upsertErr } = await sb.from('remaju_filters').upsert({ user_id: user.id, districts }, { onConflict: 'user_id' })
+      if (upsertErr) {
+        logger.error('Error guardando distritos', { error: upsertErr.message })
+        return ctx.answerCbQuery('❌ Error guardando. Intenta de nuevo.')
+      }
       const currentLine = districts.length ? districts.slice(0, 4).join(', ') + (districts.length > 4 ? '...' : '') : 'Todos Lima'
       await ctx.editMessageText(
         `📍 <b>Distritos</b>\n\n` +

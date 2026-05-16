@@ -1,0 +1,791 @@
+const { Telegraf, Markup } = require('telegraf')
+const { createClient } = require('@supabase/supabase-js')
+const logger = require('../utils/logger')
+
+const BOT_TOKEN   = process.env.ADMIN_TELEGRAM_TOKEN
+const ADMIN_ID    = parseInt(process.env.ADMIN_TELEGRAM_CHAT_ID)
+
+const PRICE_SOLES = process.env.PAYMENT_PRICE_SOLES  || '70'
+const YAPE_NUM    = process.env.PAYMENT_YAPE          || '—'
+const PLIN_NUM    = process.env.PAYMENT_PLIN          || '—'
+const ADMIN_NAME  = process.env.PAYMENT_ADMIN_NAME    || 'Gabriel Barrero'
+
+let supabase = null
+
+// Estado temporal en memoria para inputs personalizados
+const awaitingInput = new Map()  // telegram_id → 'precio'
+
+function getSupabase () {
+  if (!supabase) {
+    supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_KEY,
+      { auth: { persistSession: false } }
+    )
+  }
+  return supabase
+}
+
+async function getOrCreateUser (telegramUser) {
+  const sb = getSupabase()
+  const { id, username, first_name, last_name } = telegramUser
+
+  const { data: existing } = await sb
+    .from('remaju_users')
+    .select('*')
+    .eq('telegram_id', id)
+    .single()
+
+  if (existing) return { user: existing, isNew: false }
+
+  const trialEnds = new Date()
+  trialEnds.setDate(trialEnds.getDate() + 7)
+
+  const { data: newUser, error } = await sb
+    .from('remaju_users')
+    .insert({
+      telegram_id:       id,
+      telegram_username: username || null,
+      first_name:        first_name || 'Usuario',
+      last_name:         last_name  || null,
+      subscription_status: 'trial',
+      trial_ends_at:     trialEnds.toISOString()
+    })
+    .select()
+    .single()
+
+  if (error) throw error
+
+  // Crear filtros por defecto
+  await sb.from('remaju_filters').insert({ user_id: newUser.id })
+
+  return { user: newUser, isNew: true }
+}
+
+function getStatusEmoji (status, isExpired) {
+  if (status === 'active')   return '✅'
+  if (status === 'trial' && !isExpired) return '🕐'
+  return '❌'
+}
+
+function formatSubscriptionLine (user) {
+  const { subscription_status, trial_ends_at, subscription_ends_at } = user
+  const now = new Date()
+
+  if (subscription_status === 'active' && subscription_ends_at) {
+    const end  = new Date(subscription_ends_at)
+    const days = Math.ceil((end - now) / 86400000)
+    return `✅ Suscripción <b>activa</b> — vence en ${days} días (${end.toLocaleDateString('es-PE')})`
+  }
+
+  if (subscription_status === 'trial' && trial_ends_at) {
+    const end  = new Date(trial_ends_at)
+    const days = Math.ceil((end - now) / 86400000)
+    if (days > 0) return `🕐 Prueba gratuita — <b>${days} días restantes</b>`
+    return `⚠️ Prueba vencida — usa /suscripcion para continuar`
+  }
+
+  return `❌ Suscripción vencida — usa /suscripcion`
+}
+
+function isUserActive (user) {
+  const now = new Date()
+  if (user.subscription_status === 'active') {
+    return !user.subscription_ends_at || new Date(user.subscription_ends_at) > now
+  }
+  if (user.subscription_status === 'trial') {
+    return !user.trial_ends_at || new Date(user.trial_ends_at) > now
+  }
+  return false
+}
+
+// ── Crear y configurar bot ─────────────────────────────────────────────────
+
+function createBot () {
+  if (!BOT_TOKEN) {
+    logger.warn('ADMIN_TELEGRAM_TOKEN no configurado — bot SaaS deshabilitado')
+    return null
+  }
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
+    logger.warn('SUPABASE_URL/SERVICE_KEY no configurados — bot SaaS deshabilitado')
+    return null
+  }
+
+  const bot = new Telegraf(BOT_TOKEN)
+
+  // ── /start ───────────────────────────────────────────────────────────────
+  bot.start(async (ctx) => {
+    try {
+      const { user, isNew } = await getOrCreateUser(ctx.from)
+
+      if (isNew) {
+        await ctx.replyWithHTML(
+          `👋 <b>¡Hola ${user.first_name}!</b>\n\n` +
+          `Bienvenido a <b>REMAJU Monitor</b> — alertas diarias de remates inmobiliarios en Lima.\n\n` +
+          `🕐 Tu cuenta está activa con <b>7 días de prueba gratuita</b>.\n\n` +
+          `Cada mañana recibirás propiedades en Lima bajo tu presupuesto, clasificadas por tier:\n` +
+          `🔴 Super Ganga  ·  🟠 Muy Bueno  ·  🟡 Bueno  ·  🟢 Aceptable\n\n` +
+          `<b>Comandos:</b>\n` +
+          `📊 /estado — ver tu suscripción y filtros\n` +
+          `⚙️ /filtros — personalizar alertas\n` +
+          `💳 /suscripcion — contratar plan mensual`
+        )
+
+        // Notificar al admin
+        await bot.telegram.sendMessage(ADMIN_ID,
+          `🆕 <b>Nuevo usuario registrado</b>\n` +
+          `👤 ${user.first_name} (@${user.telegram_username || 'sin_usuario'})\n` +
+          `🆔 ID: <code>${user.telegram_id}</code>`,
+          { parse_mode: 'HTML' }
+        ).catch(() => {})
+
+      } else {
+        await ctx.replyWithHTML(
+          `👋 <b>¡Hola de nuevo, ${user.first_name}!</b>\n\n` +
+          `${formatSubscriptionLine(user)}\n\n` +
+          `📊 /estado — ver suscripción y filtros\n` +
+          `💳 /suscripcion — contratar plan`
+        )
+      }
+    } catch (err) {
+      logger.error('Error en /start', { error: err.message, telegram_id: ctx.from.id })
+      await ctx.reply('Hubo un error al registrarte. Intenta de nuevo en unos minutos.')
+    }
+  })
+
+  // ── /estado ──────────────────────────────────────────────────────────────
+  bot.command('estado', async (ctx) => {
+    try {
+      const sb = getSupabase()
+      const { data: user } = await sb
+        .from('remaju_users')
+        .select('*, remaju_filters(*)')
+        .eq('telegram_id', ctx.from.id)
+        .single()
+
+      if (!user) {
+        return ctx.reply('No estás registrado. Usa /start para comenzar.')
+      }
+
+      const f = user.remaju_filters?.[0]
+      const filterInfo = f
+        ? `💰 Precio: <b>$${f.min_price_usd.toLocaleString()} – $${f.max_price_usd.toLocaleString()} USD</b>\n` +
+          `🏠 Tipos: ${(f.property_types || []).join(', ')}\n` +
+          `📍 Distritos: ${f.districts?.length ? f.districts.join(', ') : 'Todos Lima'}`
+        : 'Sin filtros configurados'
+
+      await ctx.replyWithHTML(
+        `📊 <b>Tu cuenta REMAJU Monitor</b>\n\n` +
+        `${formatSubscriptionLine(user)}\n\n` +
+        `<b>Filtros activos:</b>\n${filterInfo}\n\n` +
+        `⚙️ /filtros — modificar preferencias\n` +
+        `💳 /suscripcion — ver plan`
+      )
+    } catch (err) {
+      logger.error('Error en /estado', { error: err.message })
+      await ctx.reply('Error al consultar tu estado. Intenta de nuevo.')
+    }
+  })
+
+  // ── /suscripcion ─────────────────────────────────────────────────────────
+  bot.command('suscripcion', async (ctx) => {
+    await ctx.replyWithHTML(
+      `💳 <b>Plan REMAJU Monitor</b>\n\n` +
+      `<b>S/ ${PRICE_SOLES}/mes</b> — Acceso completo\n` +
+      `• Alertas diarias personalizadas\n` +
+      `• Todos los distritos de Lima\n` +
+      `• Filtros por precio, tipo y tier\n` +
+      `• Sin publicidad ni límites\n\n` +
+      `━━━━━━━━━━━━━━━━━━\n` +
+      `<b>Cómo pagar:</b>\n\n` +
+      `📱 <b>Yape:</b> ${YAPE_NUM}\n` +
+      `📱 <b>Plin:</b> ${PLIN_NUM}\n` +
+      `   A nombre de: <b>${ADMIN_NAME}</b>\n\n` +
+      `━━━━━━━━━━━━━━━━━━\n` +
+      `<i>Después de pagar, envía aquí tu captura de pantalla del comprobante. Te activamos en menos de 24h.</i>`
+    )
+  })
+
+  // ── Recibir comprobante de pago (foto o archivo) ─────────────────────────
+  bot.on(['photo', 'document'], async (ctx) => {
+    const { id, username, first_name } = ctx.from
+    try {
+      await bot.telegram.forwardMessage(ADMIN_ID, id, ctx.message.message_id)
+      await bot.telegram.sendMessage(
+        ADMIN_ID,
+        `💰 <b>Comprobante de pago</b>\n` +
+        `👤 ${first_name} (@${username || 'sin_usuario'})\n` +
+        `🆔 <code>${id}</code>\n\n` +
+        `Activar con: <code>/activar ${id}</code>`,
+        { parse_mode: 'HTML' }
+      )
+      await ctx.reply('✅ Comprobante recibido. Te activamos en menos de 24 horas. ¡Gracias!')
+    } catch (err) {
+      logger.error('Error reenviando comprobante', { error: err.message })
+      await ctx.reply('Hubo un error enviando el comprobante. Escríbele directamente al administrador.')
+    }
+  })
+
+  // ── /filtros — menú principal de configuración ──────────────────────────
+  bot.command('filtros', async (ctx) => {
+    const sb = getSupabase()
+    const { data: user } = await sb.from('remaju_users').select('id').eq('telegram_id', ctx.from.id).single()
+    if (!user) return ctx.reply('Usa /start primero para registrarte.')
+
+    const { data: f } = await sb.from('remaju_filters').select('*').eq('user_id', user.id).single()
+
+    const maxPrice     = f?.max_price_usd   || 90000
+    const types        = f?.property_types  || ['casa','departamento','terreno','local','otro']
+    const tiers        = f?.tiers           || ['super_ganga','muy_bueno','bueno','aceptable']
+    const districts    = f?.districts       || []
+
+    const tierLabels   = { super_ganga: '🔴 Super Ganga', muy_bueno: '🟠 Muy Bueno', bueno: '🟡 Bueno', aceptable: '🟢 Aceptable' }
+    const tiersLine    = tiers.map(t => tierLabels[t] || t).join(', ')
+    const typesLine    = types.length === 5 ? 'Todos' : types.join(', ')
+    const districtsLine = districts.length ? districts.slice(0, 4).join(', ') + (districts.length > 4 ? '...' : '') : 'Todos Lima'
+
+    await ctx.replyWithHTML(
+      `⚙️ <b>Mis Filtros</b>\n\n` +
+      `💰 Precio máx: <b>$${maxPrice.toLocaleString()} USD</b>\n` +
+      `🏠 Tipos: <b>${typesLine}</b>\n` +
+      `📊 Tiers: <b>${tiersLine}</b>\n` +
+      `📍 Distritos: <b>${districtsLine}</b>\n\n` +
+      `¿Qué quieres cambiar?`,
+      Markup.inlineKeyboard([
+        [Markup.button.callback('💰 Precio máximo', 'filt:precio')],
+        [Markup.button.callback('🏠 Tipo de propiedad', 'filt:tipo')],
+        [Markup.button.callback('📊 Tiers / categorías', 'filt:tiers')],
+        [Markup.button.callback('📍 Distritos', 'filt:distritos')],
+        [Markup.button.callback('✅ Listo', 'filt:done')]
+      ])
+    )
+  })
+
+  // ── Callbacks de filtros ─────────────────────────────────────────────────
+
+  // PRECIO
+  bot.action('filt:precio', async (ctx) => {
+    await ctx.answerCbQuery()
+    await ctx.editMessageText(
+      '💰 <b>Precio máximo en USD</b>\n\nElige el tope o escribe un monto personalizado:',
+      { parse_mode: 'HTML', ...Markup.inlineKeyboard([
+        [
+          Markup.button.callback('$40k',  'precio:40000'),
+          Markup.button.callback('$60k',  'precio:60000'),
+          Markup.button.callback('$75k',  'precio:75000')
+        ],
+        [
+          Markup.button.callback('$90k',  'precio:90000'),
+          Markup.button.callback('$120k', 'precio:120000'),
+          Markup.button.callback('$150k', 'precio:150000')
+        ],
+        [
+          Markup.button.callback('$200k', 'precio:200000'),
+          Markup.button.callback('$300k', 'precio:300000'),
+          Markup.button.callback('$500k', 'precio:500000')
+        ],
+        [
+          Markup.button.callback('$750k', 'precio:750000'),
+          Markup.button.callback('$1M',   'precio:1000000')
+        ],
+        [Markup.button.callback('✏️ Escribir monto personalizado', 'precio:custom')],
+        [Markup.button.callback('« Volver', 'filt:menu')]
+      ]) }
+    )
+  })
+
+  bot.action('precio:custom', async (ctx) => {
+    await ctx.answerCbQuery()
+    awaitingInput.set(ctx.from.id, 'precio')
+    await ctx.editMessageText(
+      '✏️ <b>Monto personalizado</b>\n\nEscribe el precio máximo en USD (solo el número, sin símbolos).\n\nEjemplo: <code>250000</code>',
+      { parse_mode: 'HTML' }
+    )
+  })
+
+  bot.action(/^precio:(\d+)$/, async (ctx) => {
+    const maxPrice = parseInt(ctx.match[1])
+    await savePrecio(ctx, maxPrice)
+  })
+
+  async function savePrecio (ctx, maxPrice) {
+    const sb = getSupabase()
+    const { data: user } = await sb.from('remaju_users').select('id').eq('telegram_id', ctx.from.id).single()
+    if (!user) return ctx.answerCbQuery ? ctx.answerCbQuery('No registrado') : null
+
+    await sb.from('remaju_filters').upsert({ user_id: user.id, max_price_usd: maxPrice }, { onConflict: 'user_id' })
+
+    const label = maxPrice >= 1000000 ? '$1,000,000' : `$${maxPrice.toLocaleString('es-PE')}`
+    const text  = `✅ <b>Precio máximo guardado:</b> ${label} USD\n\n¿Qué más quieres cambiar?`
+    const kb    = Markup.inlineKeyboard([
+      [Markup.button.callback('💰 Cambiar precio',       'filt:precio')],
+      [Markup.button.callback('🏠 Tipo de propiedad',    'filt:tipo')],
+      [Markup.button.callback('📊 Tiers / categorías',   'filt:tiers')],
+      [Markup.button.callback('📍 Distritos',            'filt:distritos')],
+      [Markup.button.callback('✅ Listo',                'filt:done')]
+    ])
+
+    if (ctx.answerCbQuery) {
+      await ctx.answerCbQuery(`✅ Precio: ${label}`)
+      await ctx.editMessageText(text, { parse_mode: 'HTML', ...kb })
+    } else {
+      await ctx.replyWithHTML(text, kb)
+    }
+  }
+
+  // TIPO DE PROPIEDAD
+  bot.action('filt:tipo', async (ctx) => {
+    await ctx.answerCbQuery()
+    const sb = getSupabase()
+    const { data: user } = await sb.from('remaju_users').select('id').eq('telegram_id', ctx.from.id).single()
+    const { data: f }    = await sb.from('remaju_filters').select('property_types').eq('user_id', user?.id).single()
+    const sel = f?.property_types || ['casa','departamento','terreno','local','otro']
+
+    const options = [
+      { key: 'casa',          label: '🏠 Casa' },
+      { key: 'departamento',  label: '🏢 Departamento' },
+      { key: 'terreno',       label: '🌿 Terreno' },
+      { key: 'local',         label: '🏪 Local / Oficina' },
+      { key: 'otro',          label: '🏗️ Otro' }
+    ]
+
+    const buttons = options.map(o => [
+      Markup.button.callback(
+        (sel.includes(o.key) ? '✅ ' : '☐ ') + o.label,
+        `tipo:${o.key}`
+      )
+    ])
+    buttons.push([Markup.button.callback('« Volver', 'filt:menu')])
+
+    await ctx.editMessageText(
+      '🏠 <b>Tipo de propiedad</b>\n\nToca para activar/desactivar. Los marcados con ✅ te llegarán:',
+      { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) }
+    )
+  })
+
+  bot.action(/^tipo:(.+)$/, async (ctx) => {
+    await ctx.answerCbQuery()
+    const tipo = ctx.match[1]
+    try {
+      const sb   = getSupabase()
+      const { data: user } = await sb.from('remaju_users').select('id').eq('telegram_id', ctx.from.id).single()
+      if (!user) return
+
+      const { data: f } = await sb.from('remaju_filters').select('property_types').eq('user_id', user.id).single()
+      let types = f?.property_types || ['casa','departamento','terreno','local','otro']
+
+      if (types.includes(tipo)) {
+        if (types.length === 1) return
+        types = types.filter(t => t !== tipo)
+      } else {
+        types = [...types, tipo]
+      }
+
+      await sb.from('remaju_filters').upsert({ user_id: user.id, property_types: types }, { onConflict: 'user_id' })
+
+      const options = [
+        { key: 'casa',         label: '🏠 Casa' },
+        { key: 'departamento', label: '🏢 Departamento' },
+        { key: 'terreno',      label: '🌿 Terreno' },
+        { key: 'local',        label: '🏪 Local / Oficina' },
+        { key: 'otro',         label: '🏗️ Otro' }
+      ]
+      const buttons = options.map(o => [
+        Markup.button.callback(
+          (types.includes(o.key) ? '✅ ' : '☐ ') + o.label,
+          `tipo:${o.key}`
+        )
+      ])
+      buttons.push([Markup.button.callback('« Volver', 'filt:menu')])
+      await ctx.editMessageReplyMarkup(Markup.inlineKeyboard(buttons).reply_markup)
+    } catch (err) {
+      if (!err.message?.includes('message is not modified')) {
+        logger.error('Error en filtro tipo', { error: err.message })
+      }
+    }
+  })
+
+  // TIERS
+  bot.action('filt:tiers', async (ctx) => {
+    await ctx.answerCbQuery()
+    const sb = getSupabase()
+    const { data: user } = await sb.from('remaju_users').select('id').eq('telegram_id', ctx.from.id).single()
+    const { data: f }    = await sb.from('remaju_filters').select('tiers').eq('user_id', user?.id).single()
+    const sel = f?.tiers || ['super_ganga','muy_bueno','bueno','aceptable']
+
+    const options = [
+      { key: 'super_ganga', label: '🔴 Super Ganga  (< $40k)' },
+      { key: 'muy_bueno',   label: '🟠 Muy Bueno   ($40–60k)' },
+      { key: 'bueno',       label: '🟡 Bueno        ($60–75k)' },
+      { key: 'aceptable',   label: '🟢 Aceptable    ($75–90k)' }
+    ]
+    const buttons = options.map(o => [
+      Markup.button.callback((sel.includes(o.key) ? '✅ ' : '☐ ') + o.label, `tier:${o.key}`)
+    ])
+    buttons.push([Markup.button.callback('« Volver', 'filt:menu')])
+
+    await ctx.editMessageText(
+      '📊 <b>Categorías de precio</b>\n\nToca para activar/desactivar las que quieres recibir:',
+      { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) }
+    )
+  })
+
+  bot.action(/^tier:(.+)$/, async (ctx) => {
+    await ctx.answerCbQuery()
+    const tier = ctx.match[1]
+    try {
+      const sb   = getSupabase()
+      const { data: user } = await sb.from('remaju_users').select('id').eq('telegram_id', ctx.from.id).single()
+      if (!user) return
+
+      const { data: f } = await sb.from('remaju_filters').select('tiers').eq('user_id', user.id).single()
+      let tiers = f?.tiers || ['super_ganga','muy_bueno','bueno','aceptable']
+
+      if (tiers.includes(tier)) {
+        if (tiers.length === 1) return
+        tiers = tiers.filter(t => t !== tier)
+      } else {
+        tiers = [...tiers, tier]
+      }
+
+      await sb.from('remaju_filters').upsert({ user_id: user.id, tiers }, { onConflict: 'user_id' })
+
+      const options = [
+        { key: 'super_ganga', label: '🔴 Super Ganga  (< $40k)' },
+        { key: 'muy_bueno',   label: '🟠 Muy Bueno   ($40–60k)' },
+        { key: 'bueno',       label: '🟡 Bueno        ($60–75k)' },
+        { key: 'aceptable',   label: '🟢 Aceptable    ($75–90k)' }
+      ]
+      const buttons = options.map(o => [
+        Markup.button.callback((tiers.includes(o.key) ? '✅ ' : '☐ ') + o.label, `tier:${o.key}`)
+      ])
+      buttons.push([Markup.button.callback('« Volver', 'filt:menu')])
+      await ctx.editMessageReplyMarkup(Markup.inlineKeyboard(buttons).reply_markup)
+    } catch (err) {
+      if (!err.message?.includes('message is not modified')) {
+        logger.error('Error en filtro tier', { error: err.message })
+      }
+    }
+  })
+
+  // DISTRITOS
+  const DISTRITOS_POPULARES = [
+    ['Miraflores', 'San Isidro', 'Surco'],
+    ['San Borja', 'La Molina', 'Barranco'],
+    ['Chorrillos', 'San Miguel', 'Jesús María'],
+    ['Lince', 'Pueblo Libre', 'Magdalena'],
+    ['Los Olivos', 'SMP', 'Comas'],
+    ['ATE', 'SJL', 'Villa El Salvador'],
+    ['Callao', 'Bellavista', 'Ventanilla']
+  ]
+  const TODOS_DISTRITOS = DISTRITOS_POPULARES.flat()
+
+  bot.action('filt:distritos', async (ctx) => {
+    await ctx.answerCbQuery()
+    const sb = getSupabase()
+    const { data: user } = await sb.from('remaju_users').select('id').eq('telegram_id', ctx.from.id).single()
+    const { data: f }    = await sb.from('remaju_filters').select('districts').eq('user_id', user?.id).single()
+    const sel = f?.districts || []
+
+    await ctx.editMessageText(
+      `📍 <b>Distritos</b>\n\n` +
+      `Actualmente: <b>${sel.length ? sel.join(', ') : 'Todos Lima'}</b>\n\n` +
+      `Selecciona los distritos que te interesan (o "Todos Lima" para no filtrar):`,
+      { parse_mode: 'HTML', ...buildDistritoKeyboard(sel) }
+    )
+  })
+
+  function buildDistritoKeyboard (sel) {
+    const buttons = DISTRITOS_POPULARES.map(row =>
+      row.map(d => Markup.button.callback((sel.includes(d) ? '✅ ' : '') + d, `dist:${d}`))
+    )
+    buttons.push([Markup.button.callback(
+      sel.length === 0 ? '✅ Todos Lima' : '🌍 Todos Lima (quitar filtro)',
+      'dist:todos'
+    )])
+    buttons.push([Markup.button.callback('« Volver', 'filt:menu')])
+    return Markup.inlineKeyboard(buttons)
+  }
+
+  bot.action(/^dist:(.+)$/, async (ctx) => {
+    await ctx.answerCbQuery()
+    const distrito = ctx.match[1]
+    try {
+      const sb = getSupabase()
+      const { data: user } = await sb.from('remaju_users').select('id').eq('telegram_id', ctx.from.id).single()
+      if (!user) return
+
+      const { data: f } = await sb.from('remaju_filters').select('districts').eq('user_id', user.id).single()
+      let districts = f?.districts || []
+
+      if (distrito === 'todos') {
+        districts = []
+      } else if (districts.includes(distrito)) {
+        districts = districts.filter(d => d !== distrito)
+      } else {
+        districts = [...districts, distrito]
+      }
+
+      await sb.from('remaju_filters').upsert({ user_id: user.id, districts }, { onConflict: 'user_id' })
+      const currentLine = districts.length ? districts.slice(0, 4).join(', ') + (districts.length > 4 ? '...' : '') : 'Todos Lima'
+      await ctx.editMessageText(
+        `📍 <b>Distritos</b>\n\n` +
+        `Actualmente: <b>${currentLine}</b>\n\n` +
+        `Selecciona los distritos que te interesan (o "Todos Lima" para no filtrar):`,
+        { parse_mode: 'HTML', ...buildDistritoKeyboard(districts) }
+      )
+    } catch (err) {
+      if (!err.message?.includes('message is not modified')) {
+        logger.error('Error en filtro distrito', { error: err.message })
+      }
+    }
+  })
+
+  // MENÚ PRINCIPAL (volver)
+  bot.action('filt:menu', async (ctx) => {
+    await ctx.answerCbQuery()
+    const sb = getSupabase()
+    const { data: user } = await sb.from('remaju_users').select('id').eq('telegram_id', ctx.from.id).single()
+    const { data: f }    = await sb.from('remaju_filters').select('*').eq('user_id', user?.id).single()
+
+    const maxPrice      = f?.max_price_usd  || 90000
+    const types         = f?.property_types || ['casa','departamento','terreno','local','otro']
+    const tiers         = f?.tiers          || ['super_ganga','muy_bueno','bueno','aceptable']
+    const districts     = f?.districts      || []
+    const tierLabels    = { super_ganga: '🔴', muy_bueno: '🟠', bueno: '🟡', aceptable: '🟢' }
+
+    await ctx.editMessageText(
+      `⚙️ <b>Mis Filtros</b>\n\n` +
+      `💰 Precio máx: <b>$${maxPrice.toLocaleString()} USD</b>\n` +
+      `🏠 Tipos: <b>${types.length === 5 ? 'Todos' : types.join(', ')}</b>\n` +
+      `📊 Tiers: <b>${tiers.map(t => tierLabels[t]).join(' ')}</b>\n` +
+      `📍 Distritos: <b>${districts.length ? districts.slice(0,4).join(', ') + (districts.length > 4 ? '...' : '') : 'Todos Lima'}</b>\n\n` +
+      `¿Qué quieres cambiar?`,
+      { parse_mode: 'HTML', ...Markup.inlineKeyboard([
+        [Markup.button.callback('💰 Precio máximo', 'filt:precio')],
+        [Markup.button.callback('🏠 Tipo de propiedad', 'filt:tipo')],
+        [Markup.button.callback('📊 Tiers / categorías', 'filt:tiers')],
+        [Markup.button.callback('📍 Distritos', 'filt:distritos')],
+        [Markup.button.callback('✅ Listo', 'filt:done')]
+      ]) }
+    )
+  })
+
+  // LISTO
+  bot.action('filt:done', async (ctx) => {
+    await ctx.answerCbQuery('✅ Filtros guardados')
+    await ctx.editMessageText(
+      '✅ <b>Filtros guardados.</b>\n\nLos recibirás aplicados desde mañana en tu alerta diaria.\n\n' +
+      '📊 /estado — ver resumen\n⚙️ /filtros — modificar de nuevo',
+      { parse_mode: 'HTML' }
+    )
+  })
+
+  // ── Mensaje de texto genérico — guía al usuario ──────────────────────────
+  bot.on('text', async (ctx, next) => {
+    if (ctx.message.text.startsWith('/')) return next()
+
+    // Input personalizado de precio
+    if (awaitingInput.get(ctx.from.id) === 'precio') {
+      awaitingInput.delete(ctx.from.id)
+      const raw     = ctx.message.text.replace(/[^0-9]/g, '')
+      const amount  = parseInt(raw)
+
+      if (!amount || amount < 1000 || amount > 10000000) {
+        return ctx.replyWithHTML(
+          '⚠️ Monto inválido. Ingresa un número entre <b>1,000</b> y <b>10,000,000</b> USD.\n\nEjemplo: <code>250000</code>'
+        )
+      }
+
+      return savePrecio(ctx, amount)
+    }
+
+    await ctx.replyWithHTML(
+      `Usa los comandos para interactuar:\n\n` +
+      `📊 /estado — ver tu suscripción\n` +
+      `⚙️ /filtros — personalizar alertas\n` +
+      `💳 /suscripcion — ver opciones de pago\n\n` +
+      `<i>Para enviar un comprobante de pago, adjunta la imagen directamente.</i>`
+    )
+  })
+
+  // ════════════════════════════════════════════════════════
+  // COMANDOS DE ADMIN (solo ADMIN_ID)
+  // ════════════════════════════════════════════════════════
+
+  // ── Callback: reactivar usuario desde notificación de vencimiento ──────────
+  bot.action(/^reactivar:(\d+)$/, async (ctx) => {
+    if (ctx.from.id !== ADMIN_ID) {
+      return ctx.answerCbQuery('⛔ No autorizado')
+    }
+    await ctx.answerCbQuery('Activando...')
+
+    const targetTelegramId = parseInt(ctx.match[1])
+    const sb   = getSupabase()
+    const ends = new Date()
+    ends.setDate(ends.getDate() + 30)
+
+    const { data: user, error } = await sb
+      .from('remaju_users')
+      .update({ subscription_status: 'active', subscription_ends_at: ends.toISOString(), active: true })
+      .eq('telegram_id', targetTelegramId)
+      .select()
+      .single()
+
+    if (error || !user) {
+      return ctx.editMessageText('❌ Usuario no encontrado.', { parse_mode: 'HTML' })
+    }
+
+    await bot.telegram.sendMessage(
+      targetTelegramId,
+      `🎉 <b>¡Tu suscripción está activa!</b>\n\n` +
+      `✅ Acceso completo por <b>30 días</b>\n` +
+      `📅 Vence: ${ends.toLocaleDateString('es-PE')}\n\n` +
+      `Recibirás alertas cada mañana con los mejores remates de Lima.\n` +
+      `Usa /filtros para personalizar tus preferencias.`,
+      { parse_mode: 'HTML' }
+    ).catch(() => {})
+
+    await ctx.editMessageText(
+      `✅ <b>${user.first_name} reactivado</b>\n` +
+      `📅 Vence: ${ends.toLocaleDateString('es-PE')} (30 días)`,
+      { parse_mode: 'HTML' }
+    )
+  })
+
+  // /myid — diagnóstico
+  bot.command('myid', async (ctx) => {
+    await ctx.reply(`Tu Telegram ID: ${ctx.from.id}`)
+  })
+
+  // /activar <telegram_id> [dias]
+  bot.command('activar', async (ctx) => {
+    if (ctx.from.id !== ADMIN_ID) {
+      await ctx.reply(`⛔ No autorizado. Tu ID: ${ctx.from.id} | Admin esperado: ${ADMIN_ID}`)
+      return
+    }
+
+    const args      = ctx.message.text.trim().split(/\s+/)
+    const targetId  = parseInt(args[1])
+    const days      = parseInt(args[2]) || 30
+
+    if (!targetId) return ctx.reply('Uso: /activar <telegram_id> [días]')
+
+    try {
+      const sb  = getSupabase()
+      const ends = new Date()
+      ends.setDate(ends.getDate() + days)
+
+      const { data: user, error } = await sb
+        .from('remaju_users')
+        .update({
+          subscription_status:  'active',
+          subscription_ends_at: ends.toISOString(),
+          active: true
+        })
+        .eq('telegram_id', targetId)
+        .select()
+        .single()
+
+      if (error || !user) return ctx.reply(`❌ Usuario ${targetId} no encontrado`)
+
+      // Notificar al usuario
+      await bot.telegram.sendMessage(
+        targetId,
+        `🎉 <b>¡Tu suscripción está activa!</b>\n\n` +
+        `✅ Acceso completo por <b>${days} días</b>\n` +
+        `📅 Vence: ${ends.toLocaleDateString('es-PE')}\n\n` +
+        `Recibirás alertas cada mañana con los mejores remates de Lima.\n` +
+        `Usa /filtros para personalizar qué tipo de propiedades te interesan.`,
+        { parse_mode: 'HTML' }
+      ).catch(() => {})
+
+      await ctx.replyWithHTML(
+        `✅ <b>Activado</b>\n` +
+        `👤 ${user.first_name} (ID: ${targetId})\n` +
+        `📅 Vence: ${ends.toLocaleDateString('es-PE')} (${days} días)`
+      )
+    } catch (err) {
+      logger.error('Error en /activar', { error: err.message })
+      await ctx.reply(`Error: ${err.message}`)
+    }
+  })
+
+  // /desactivar <telegram_id>
+  bot.command('desactivar', async (ctx) => {
+    if (ctx.from.id !== ADMIN_ID) return
+
+    const args     = ctx.message.text.trim().split(/\s+/)
+    const targetId = parseInt(args[1])
+    if (!targetId) return ctx.reply('Uso: /desactivar <telegram_id>')
+
+    const sb = getSupabase()
+    const { data: user } = await sb
+      .from('remaju_users')
+      .update({ subscription_status: 'cancelled', active: false })
+      .eq('telegram_id', targetId)
+      .select()
+      .single()
+
+    if (!user) return ctx.reply(`❌ Usuario ${targetId} no encontrado`)
+    await ctx.reply(`✅ Usuario ${user.first_name} (${targetId}) desactivado`)
+  })
+
+  // /usuarios — listado de usuarios
+  bot.command('usuarios', async (ctx) => {
+    if (ctx.from.id !== ADMIN_ID) return
+
+    const sb = getSupabase()
+    const { data: users } = await sb
+      .from('remaju_users')
+      .select('telegram_id, first_name, telegram_username, subscription_status, trial_ends_at, subscription_ends_at, created_at')
+      .order('created_at', { ascending: false })
+      .limit(25)
+
+    if (!users?.length) return ctx.reply('Sin usuarios registrados aún.')
+
+    const lines = users.map(u => {
+      const now  = new Date()
+      const end  = u.subscription_status === 'active'
+        ? u.subscription_ends_at ? new Date(u.subscription_ends_at) : null
+        : u.trial_ends_at        ? new Date(u.trial_ends_at)        : null
+      const days = end ? Math.ceil((end - now) / 86400000) : null
+      const emoji = u.subscription_status === 'active' ? '✅'
+        : u.subscription_status === 'trial' && days > 0 ? '🕐' : '❌'
+
+      return `${emoji} ${u.first_name} (@${u.telegram_username || '?'}) — ${days !== null ? days + 'd' : '?'}`
+    })
+
+    await ctx.replyWithHTML(
+      `<b>👥 Usuarios (${users.length}):</b>\n\n` + lines.join('\n') + '\n\n' +
+      `<i>Activar: /activar &lt;id&gt; [días]</i>`
+    )
+  })
+
+  // /stats — estadísticas rápidas
+  bot.command('stats', async (ctx) => {
+    if (ctx.from.id !== ADMIN_ID) return
+
+    const sb = getSupabase()
+    const { data: users } = await sb.from('remaju_users').select('subscription_status, trial_ends_at, subscription_ends_at')
+
+    const now    = new Date()
+    const total  = users?.length || 0
+    const active = users?.filter(u => u.subscription_status === 'active' && (!u.subscription_ends_at || new Date(u.subscription_ends_at) > now)).length || 0
+    const trial  = users?.filter(u => u.subscription_status === 'trial'  && (!u.trial_ends_at || new Date(u.trial_ends_at) > now)).length || 0
+    const expired = total - active - trial
+
+    await ctx.replyWithHTML(
+      `📈 <b>Estadísticas REMAJU SaaS</b>\n\n` +
+      `👥 Total usuarios: <b>${total}</b>\n` +
+      `✅ Activos (pago): <b>${active}</b>\n` +
+      `🕐 En prueba:      <b>${trial}</b>\n` +
+      `❌ Vencidos:       <b>${expired}</b>\n\n` +
+      `💰 MRR est.: <b>S/ ${(active * parseInt(PRICE_SOLES)).toLocaleString('es-PE')}</b>`
+    )
+  })
+
+  return bot
+}
+
+module.exports = { createBot, isUserActive, getSupabase }

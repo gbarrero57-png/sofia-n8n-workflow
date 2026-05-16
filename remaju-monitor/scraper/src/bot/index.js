@@ -172,7 +172,7 @@ function createBot () {
       const filterInfo = f
         ? `💰 Precio: <b>$${(f.min_price_usd || 0).toLocaleString()} – $${(f.max_price_usd || 90000).toLocaleString()} USD</b>\n` +
           `🏠 Tipos: ${(f.property_types || []).join(', ')}\n` +
-          `📍 Distritos: ${f.districts?.length ? f.districts.join(', ') : 'Todos Lima'}`
+          `📍 Distritos: ${f.districts?.length ? f.districts.slice(0,3).join(', ') + (f.districts.length > 3 ? ` (+${f.districts.length - 3} más)` : '') : 'Todo el Perú'}`
         : 'Sin filtros configurados'
 
       await ctx.replyWithHTML(
@@ -243,7 +243,7 @@ function createBot () {
     const tierLabels   = { super_ganga: '🔴 Super Ganga', muy_bueno: '🟠 Muy Bueno', bueno: '🟡 Bueno', aceptable: '🟢 Aceptable' }
     const tiersLine    = tiers.map(t => tierLabels[t] || t).join(', ')
     const typesLine    = types.length === 5 ? 'Todos' : types.join(', ')
-    const districtsLine = districts.length ? districts.slice(0, 4).join(', ') + (districts.length > 4 ? '...' : '') : 'Todos Lima'
+    const districtsLine = districts.length ? districts.slice(0, 4).join(', ') + (districts.length > 4 ? '...' : '') : 'Todo el Perú'
 
     await ctx.replyWithHTML(
       `⚙️ <b>Mis Filtros</b>\n\n` +
@@ -477,18 +477,104 @@ function createBot () {
     }
   })
 
-  // DISTRITOS
-  const DISTRITOS_POPULARES = [
+  // ── DISTRITOS — datos completos de todas las regiones del Perú ──────────────
+
+  const LIMA_RAPIDO = [
     ['Miraflores', 'San Isidro', 'Surco'],
     ['San Borja', 'La Molina', 'Barranco'],
     ['Chorrillos', 'San Miguel', 'Jesús María'],
     ['Lince', 'Pueblo Libre', 'Magdalena'],
-    ['Los Olivos', 'SMP', 'Comas'],
-    ['ATE', 'SJL', 'Villa El Salvador'],
-    ['Callao', 'Bellavista', 'Ventanilla']
+    ['Los Olivos', 'San Martín de Porres', 'Comas'],
+    ['ATE', 'San Juan de Lurigancho', 'Villa El Salvador'],
+    ['Villa María del Triunfo', 'San Juan de Miraflores', 'Independencia'],
+    ['Carabayllo', 'Puente Piedra', 'Santa Anita'],
+    ['La Victoria', 'Breña', 'Rímac'],
+    ['Cercado de Lima', 'El Agustino', 'Lurigancho'],
+    ['Callao', 'Bellavista', 'Ventanilla'],
   ]
-  const TODOS_DISTRITOS = DISTRITOS_POPULARES.flat()
 
+  const PERU_REGIONES = {
+    'AMAZONAS':      { label: 'Amazonas',       rows: [['Chachapoyas', 'Bagua Grande', 'Bagua'], ['Luya', 'Bongará', 'Rodríguez de Mendoza']] },
+    'ANCASH':        { label: 'Áncash',          rows: [['Chimbote', 'Nuevo Chimbote', 'Huaraz'], ['Caraz', 'Carhuaz', 'Yungay'], ['Casma', 'Barranca', 'Huarmey']] },
+    'APURIMAC':      { label: 'Apurímac',        rows: [['Abancay', 'Tamburco', 'Andahuaylas'], ['San Jerónimo', 'Chincheros', 'Cotabambas']] },
+    'AREQUIPA':      { label: 'Arequipa',        rows: [['Arequipa', 'Cayma', 'Cerro Colorado'], ['Sachaca', 'Socabaya', 'José Luis Bustamante'], ['Paucarpata', 'Mariano Melgar', 'Hunter'], ['Yanahuara', 'Tiabaya', 'Characato'], ['Camaná', 'Islay', 'Caravelí']] },
+    'AYACUCHO':      { label: 'Ayacucho',        rows: [['Ayacucho', 'San Juan Bautista', 'Carmen Alto'], ['Jesús Nazareno', 'Huanta', 'La Mar']] },
+    'CAJAMARCA':     { label: 'Cajamarca',       rows: [['Cajamarca', 'Baños del Inca', 'Llacanora'], ['Jaén', 'San Ignacio', 'Chota'], ['Cutervo', 'Santa Cruz', 'Celendín']] },
+    'CALLAO':        { label: 'Callao',          rows: [['Callao', 'Bellavista', 'La Perla'], ['La Punta', 'Mi Perú', 'Ventanilla']] },
+    'CUSCO':         { label: 'Cusco',           rows: [['Cusco', 'San Sebastián', 'San Jerónimo'], ['Santiago', 'Wanchaq', 'Poroy'], ['Urubamba', 'Pisac', 'Calca'], ['Quillabamba', 'Espinar', 'Sicuani']] },
+    'HUANCAVELICA':  { label: 'Huancavelica',    rows: [['Huancavelica', 'Ascensión', 'Pampas'], ['Acobamba', 'Churcampa', 'Tayacaja']] },
+    'HUANUCO':       { label: 'Huánuco',         rows: [['Huánuco', 'Amarilis', 'Pillco Marca'], ['Tingo María', 'Leoncio Prado', 'Ambo'], ['Llata', 'Puerto Inca', 'Pachitea']] },
+    'ICA':           { label: 'Ica',             rows: [['Ica', 'La Tinguiña', 'Subtanjalla'], ['Chincha Alta', 'El Carmen', 'Grocio Prado'], ['Pisco', 'Paracas', 'San Andrés'], ['Nasca', 'Vista Alegre', 'Palpa']] },
+    'JUNIN':         { label: 'Junín',           rows: [['Huancayo', 'El Tambo', 'Chilca'], ['Chupaca', 'Concepción', 'Jauja'], ['Tarma', 'La Oroya', 'Junín'], ['Satipo', 'Chanchamayo', 'San Ramón']] },
+    'LA_LIBERTAD':   { label: 'La Libertad',     rows: [['Trujillo', 'Víctor Larco Herrera', 'El Porvenir'], ['La Esperanza', 'Florencia de Mora', 'Huanchaco'], ['Moche', 'Laredo', 'Salaverry'], ['Chepén', 'Pacasmayo', 'Ascope'], ['Santiago de Chuco', 'Otuzco', 'Virú']] },
+    'LAMBAYEQUE':    { label: 'Lambayeque',      rows: [['Chiclayo', 'La Victoria', 'José Leonardo Ortiz'], ['Pimentel', 'Monsefú', 'Reque'], ['Lambayeque', 'Olmos', 'Motupe'], ['Ferreñafe', 'Mesones Muro', 'Incahuasi']] },
+    'LIMA':          { label: 'Lima (provincia)', rows: [['Miraflores', 'San Isidro', 'Surco'], ['San Borja', 'La Molina', 'Barranco'], ['Chorrillos', 'San Miguel', 'Jesús María'], ['Lince', 'Pueblo Libre', 'Magdalena'], ['Los Olivos', 'San Martín de Porres', 'Comas'], ['ATE', 'San Juan de Lurigancho', 'Villa El Salvador'], ['Villa María del Triunfo', 'San Juan de Miraflores', 'Independencia'], ['Carabayllo', 'Puente Piedra', 'Santa Anita'], ['La Victoria', 'Breña', 'Rímac'], ['Cercado de Lima', 'El Agustino', 'Lurigancho'], ['Lunahuaná', 'Cañete', 'Huaral'], ['Huacho', 'Barranca', 'Huaura']] },
+    'LORETO':        { label: 'Loreto',          rows: [['Iquitos', 'San Juan Bautista', 'Punchana'], ['Belén', 'Nauta', 'Requena'], ['Yurimaguas', 'Contamana', 'Caballococha']] },
+    'MADRE_DE_DIOS': { label: 'Madre de Dios',   rows: [['Puerto Maldonado', 'Tambopata', 'Inambari'], ['Las Piedras', 'Laberinto', 'Iñapari']] },
+    'MOQUEGUA':      { label: 'Moquegua',        rows: [['Moquegua', 'Samegua', 'Torata'], ['Ilo', 'El Algarrobal', 'Pacocha']] },
+    'PASCO':         { label: 'Pasco',           rows: [['Cerro de Pasco', 'Yanacancha', 'Chaupimarca'], ['Oxapampa', 'Villa Rica', 'Pozuzo']] },
+    'PIURA':         { label: 'Piura',           rows: [['Piura', 'Castilla', 'Veintiséis de Octubre'], ['Catacaos', 'Chulucanas', 'La Unión'], ['Sullana', 'Bellavista', 'Querecotillo'], ['Talara', 'Pariñas', 'La Brea'], ['Paita', 'Colán', 'Amotape']] },
+    'PUNO':          { label: 'Puno',            rows: [['Puno', 'Paucarcolla', 'Acora'], ['Juliaca', 'Caracoto', 'Cabana'], ['Azángaro', 'Lampa', 'Yunguyo'], ['Ilave', 'Desaguadero', 'Moho']] },
+    'SAN_MARTIN':    { label: 'San Martín',      rows: [['Tarapoto', 'Morales', 'La Banda de Shilcayo'], ['Moyobamba', 'Jepelacio', 'Soritor'], ['Rioja', 'Nueva Cajamarca', 'Naranjillo'], ['Juanjuí', 'Tocache', 'Bellavista']] },
+    'TACNA':         { label: 'Tacna',           rows: [['Tacna', 'Gregorio Albarracín', 'Alto de la Alianza'], ['Ciudad Nueva', 'Pocollay', 'Sama']] },
+    'TUMBES':        { label: 'Tumbes',          rows: [['Tumbes', 'Corrales', 'San Jacinto'], ['San Juan de la Virgen', 'Zarumilla', 'La Cruz'], ['Zorritos', 'Casitas', 'Canoas de Punta Sal']] },
+    'UCAYALI':       { label: 'Ucayali',         rows: [['Pucallpa', 'Callería', 'Manantay'], ['Yarinacocha', 'Campo Verde', 'Nueva Requena'], ['Coronel Portillo', 'Atalaya', 'Padre Abad']] },
+  }
+
+  const REGIONES_GRID = [
+    ['LIMA', 'CALLAO'],
+    ['AREQUIPA', 'LA_LIBERTAD', 'PIURA'],
+    ['LAMBAYEQUE', 'CUSCO', 'JUNIN'],
+    ['ANCASH', 'ICA', 'SAN_MARTIN'],
+    ['HUANUCO', 'PUNO', 'CAJAMARCA'],
+    ['TACNA', 'MOQUEGUA', 'TUMBES'],
+    ['UCAYALI', 'LORETO', 'AMAZONAS'],
+    ['APURIMAC', 'AYACUCHO', 'HUANCAVELICA'],
+    ['PASCO', 'MADRE_DE_DIOS'],
+  ]
+
+  // ── helper: texto resumen de distritos seleccionados ──────────────────────
+  function selLine (districts) {
+    if (!districts.length) return 'Todos el Perú'
+    return districts.slice(0, 4).join(', ') + (districts.length > 4 ? ` (+${districts.length - 4} más)` : '')
+  }
+
+  // ── Lima rápido (pantalla inicial de distritos) ───────────────────────────
+  function buildLimaKeyboard (sel) {
+    const buttons = LIMA_RAPIDO.map(row =>
+      row.map(d => Markup.button.callback((sel.includes(d) ? '✅ ' : '') + d, `dist:${d}`))
+    )
+    buttons.push([
+      Markup.button.callback(sel.length === 0 ? '✅ Todo el Perú' : '🌍 Todo el Perú (quitar filtro)', 'dist:todos'),
+    ])
+    buttons.push([Markup.button.callback('🗺 Otras regiones del Perú', 'filt:regiones')])
+    buttons.push([Markup.button.callback('« Volver al menú', 'filt:menu')])
+    return Markup.inlineKeyboard(buttons)
+  }
+
+  // ── Teclado de una región específica ─────────────────────────────────────
+  function buildRegionKeyboard (regionKey, sel) {
+    const region = PERU_REGIONES[regionKey]
+    const buttons = region.rows.map(row =>
+      row.map(d => Markup.button.callback((sel.includes(d) ? '✅ ' : '') + d, `ddst:${regionKey}:${d}`))
+    )
+    buttons.push([Markup.button.callback('🌍 Todo el Perú (quitar filtro)', 'ddst:' + regionKey + ':__todos__')])
+    buttons.push([Markup.button.callback('« Regiones', 'filt:regiones')])
+    buttons.push([Markup.button.callback('« Volver al menú', 'filt:menu')])
+    return Markup.inlineKeyboard(buttons)
+  }
+
+  // ── Teclado selector de regiones ─────────────────────────────────────────
+  function buildRegionesKeyboard () {
+    const buttons = REGIONES_GRID.map(row =>
+      row.map(key => Markup.button.callback(PERU_REGIONES[key].label, `dept:${key}`))
+    )
+    buttons.push([Markup.button.callback('« Volver a Lima rápido', 'filt:distritos')])
+    buttons.push([Markup.button.callback('« Volver al menú', 'filt:menu')])
+    return Markup.inlineKeyboard(buttons)
+  }
+
+  // ── Handler: pantalla inicial distritos (Lima rápido) ────────────────────
   bot.action('filt:distritos', async (ctx) => {
     await ctx.answerCbQuery()
     const sb = getSupabase()
@@ -498,24 +584,49 @@ function createBot () {
 
     await ctx.editMessageText(
       `📍 <b>Distritos</b>\n\n` +
-      `Actualmente: <b>${sel.length ? sel.join(', ') : 'Todos Lima'}</b>\n\n` +
-      `Selecciona los distritos que te interesan (o "Todos Lima" para no filtrar):`,
-      { parse_mode: 'HTML', ...buildDistritoKeyboard(sel) }
+      `Seleccionados: <b>${selLine(sel)}</b>\n\n` +
+      `Lima rápido — toca para activar/desactivar.\nUsa <b>🗺 Otras regiones</b> para ver todo el Perú:`,
+      { parse_mode: 'HTML', ...buildLimaKeyboard(sel) }
     )
   })
 
-  function buildDistritoKeyboard (sel) {
-    const buttons = DISTRITOS_POPULARES.map(row =>
-      row.map(d => Markup.button.callback((sel.includes(d) ? '✅ ' : '') + d, `dist:${d}`))
-    )
-    buttons.push([Markup.button.callback(
-      sel.length === 0 ? '✅ Todos Lima' : '🌍 Todos Lima (quitar filtro)',
-      'dist:todos'
-    )])
-    buttons.push([Markup.button.callback('« Volver', 'filt:menu')])
-    return Markup.inlineKeyboard(buttons)
-  }
+  // ── Handler: lista de todas las regiones ─────────────────────────────────
+  bot.action('filt:regiones', async (ctx) => {
+    await ctx.answerCbQuery()
+    const sb = getSupabase()
+    const { data: user } = await sb.from('remaju_users').select('id').eq('telegram_id', ctx.from.id).single()
+    const { data: f }    = await sb.from('remaju_filters').select('districts').eq('user_id', user?.id).single()
+    const sel = f?.districts || []
 
+    await ctx.editMessageText(
+      `🗺 <b>Regiones del Perú</b>\n\n` +
+      `Seleccionados: <b>${selLine(sel)}</b>\n\n` +
+      `Elige una región para ver sus distritos:`,
+      { parse_mode: 'HTML', ...buildRegionesKeyboard() }
+    )
+  })
+
+  // ── Handler: distritos de una región específica ───────────────────────────
+  bot.action(/^dept:(.+)$/, async (ctx) => {
+    await ctx.answerCbQuery()
+    const regionKey = ctx.match[1]
+    if (!PERU_REGIONES[regionKey]) return
+
+    const sb = getSupabase()
+    const { data: user } = await sb.from('remaju_users').select('id').eq('telegram_id', ctx.from.id).single()
+    const { data: f }    = await sb.from('remaju_filters').select('districts').eq('user_id', user?.id).single()
+    const sel = f?.districts || []
+
+    const region = PERU_REGIONES[regionKey]
+    await ctx.editMessageText(
+      `📍 <b>${region.label}</b>\n\n` +
+      `Seleccionados: <b>${selLine(sel)}</b>\n\n` +
+      `Toca para activar/desactivar distritos:`,
+      { parse_mode: 'HTML', ...buildRegionKeyboard(regionKey, sel) }
+    )
+  })
+
+  // ── Handler: toggle desde Lima rápido ────────────────────────────────────
   bot.action(/^dist:(.+)$/, async (ctx) => {
     await ctx.answerCbQuery()
     const distrito = ctx.match[1]
@@ -540,16 +651,59 @@ function createBot () {
         logger.error('Error guardando distritos', { error: upsertErr.message })
         return ctx.answerCbQuery('❌ Error guardando. Intenta de nuevo.')
       }
-      const currentLine = districts.length ? districts.slice(0, 4).join(', ') + (districts.length > 4 ? '...' : '') : 'Todos Lima'
+
       await ctx.editMessageText(
         `📍 <b>Distritos</b>\n\n` +
-        `Actualmente: <b>${currentLine}</b>\n\n` +
-        `Selecciona los distritos que te interesan (o "Todos Lima" para no filtrar):`,
-        { parse_mode: 'HTML', ...buildDistritoKeyboard(districts) }
+        `Seleccionados: <b>${selLine(districts)}</b>\n\n` +
+        `Lima rápido — toca para activar/desactivar.\nUsa <b>🗺 Otras regiones</b> para ver todo el Perú:`,
+        { parse_mode: 'HTML', ...buildLimaKeyboard(districts) }
       )
     } catch (err) {
       if (!err.message?.includes('message is not modified')) {
         logger.error('Error en filtro distrito', { error: err.message })
+      }
+    }
+  })
+
+  // ── Handler: toggle desde vista de región ────────────────────────────────
+  bot.action(/^ddst:([^:]+):(.+)$/, async (ctx) => {
+    await ctx.answerCbQuery()
+    const regionKey = ctx.match[1]
+    const distrito  = ctx.match[2]
+    if (!PERU_REGIONES[regionKey]) return
+
+    try {
+      const sb = getSupabase()
+      const { data: user } = await sb.from('remaju_users').select('id').eq('telegram_id', ctx.from.id).single()
+      if (!user) return
+
+      const { data: f } = await sb.from('remaju_filters').select('districts').eq('user_id', user.id).single()
+      let districts = f?.districts || []
+
+      if (distrito === '__todos__') {
+        districts = []
+      } else if (districts.includes(distrito)) {
+        districts = districts.filter(d => d !== distrito)
+      } else {
+        districts = [...districts, distrito]
+      }
+
+      const { error: upsertErr } = await sb.from('remaju_filters').upsert({ user_id: user.id, districts }, { onConflict: 'user_id' })
+      if (upsertErr) {
+        logger.error('Error guardando distritos región', { error: upsertErr.message })
+        return ctx.answerCbQuery('❌ Error guardando. Intenta de nuevo.')
+      }
+
+      const region = PERU_REGIONES[regionKey]
+      await ctx.editMessageText(
+        `📍 <b>${region.label}</b>\n\n` +
+        `Seleccionados: <b>${selLine(districts)}</b>\n\n` +
+        `Toca para activar/desactivar distritos:`,
+        { parse_mode: 'HTML', ...buildRegionKeyboard(regionKey, districts) }
+      )
+    } catch (err) {
+      if (!err.message?.includes('message is not modified')) {
+        logger.error('Error en filtro distrito región', { error: err.message })
       }
     }
   })
@@ -572,7 +726,7 @@ function createBot () {
       `💰 Precio máx: <b>$${maxPrice.toLocaleString()} USD</b>\n` +
       `🏠 Tipos: <b>${types.length === 5 ? 'Todos' : types.join(', ')}</b>\n` +
       `📊 Tiers: <b>${tiers.map(t => tierLabels[t]).join(' ')}</b>\n` +
-      `📍 Distritos: <b>${districts.length ? districts.slice(0,4).join(', ') + (districts.length > 4 ? '...' : '') : 'Todos Lima'}</b>\n\n` +
+      `📍 Distritos: <b>${districts.length ? districts.slice(0,4).join(', ') + (districts.length > 4 ? '...' : '') : 'Todo el Perú'}</b>\n\n` +
       `¿Qué quieres cambiar?`,
       { parse_mode: 'HTML', ...Markup.inlineKeyboard([
         [Markup.button.callback('💰 Precio máximo', 'filt:precio')],

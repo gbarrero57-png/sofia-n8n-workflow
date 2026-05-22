@@ -45,22 +45,33 @@
       color: var(--white);
       min-height: 100vh;
       overflow-x: hidden;
-      background: var(--black-deep)
+      background: #0d0a04
         url('https://images.unsplash.com/photo-1596462502278-27bfdc403348?auto=format&fit=crop&w=1920&q=80')
         center center / cover fixed no-repeat;
+      animation: bgDrift 40s ease-in-out infinite alternate;
+    }
+    @keyframes bgDrift {
+      0%   { background-position: 45% 40%; }
+      50%  { background-position: 55% 55%; }
+      100% { background-position: 48% 45%; }
     }
 
-    /* ── Background overlay — near-black, warm tint ────────────── */
+    /* ── Background overlay — warm tint, lighter than before ──── */
     body::before {
       content: '';
       position: fixed; inset: 0;
       background: linear-gradient(
         160deg,
-        rgba(0,0,0,0.97) 0%,
-        rgba(4,3,1,0.94) 50%,
-        rgba(0,0,0,0.97) 100%
+        rgba(5,3,0,0.82) 0%,
+        rgba(10,7,2,0.74) 40%,
+        rgba(5,3,0,0.80) 100%
       );
       z-index: 0; pointer-events: none;
+      animation: overlayBreath 12s ease-in-out infinite alternate;
+    }
+    @keyframes overlayBreath {
+      from { opacity: 0.88; }
+      to   { opacity: 1; }
     }
 
     /* All content layers */
@@ -68,17 +79,35 @@
     .tabs-wrap, .grid-wrap, .testimonials, .faq-section,
     footer, #toast, .fab-wa, .modal-overlay { position: relative; z-index: 10; }
 
-    /* ── Subtle gold ambient orbs ──────────────────────────────── */
+    /* ── Animated gold ambient orbs ───────────────────────────── */
     .orb {
       position: fixed; border-radius: 50%;
-      filter: blur(100px); pointer-events: none; z-index: 1;
+      filter: blur(90px); pointer-events: none; z-index: 1;
       animation: orbDrift ease-in-out infinite alternate;
     }
-    .orb1 { width:500px; height:500px; background:rgba(212,175,55,0.06); top:-80px; left:-200px; animation-duration:20s; }
-    .orb2 { width:350px; height:350px; background:rgba(212,175,55,0.04); bottom:5%; right:-100px; animation-duration:28s; animation-delay:-10s; }
+    .orb1 {
+      width: 700px; height: 700px;
+      background: radial-gradient(circle, rgba(212,175,55,0.14) 0%, rgba(212,175,55,0.04) 60%, transparent 100%);
+      top: -120px; left: -220px;
+      animation-duration: 22s;
+    }
+    .orb2 {
+      width: 500px; height: 500px;
+      background: radial-gradient(circle, rgba(180,140,30,0.12) 0%, rgba(180,140,30,0.03) 60%, transparent 100%);
+      bottom: 8%; right: -120px;
+      animation-duration: 30s; animation-delay: -12s;
+    }
+    .orb3 {
+      width: 380px; height: 380px;
+      background: radial-gradient(circle, rgba(212,175,55,0.09) 0%, transparent 70%);
+      top: 38%; left: 50%; transform: translateX(-50%);
+      animation-duration: 26s; animation-delay: -8s;
+    }
     @keyframes orbDrift {
-      from { transform: translateY(0) translateX(0); }
-      to   { transform: translateY(-40px) translateX(20px); }
+      0%   { transform: translateY(0)    translateX(0); }
+      33%  { transform: translateY(-28px) translateX(18px); }
+      66%  { transform: translateY(-14px) translateX(-10px); }
+      100% { transform: translateY(-42px) translateX(24px); }
     }
 
     /* ── Promo bar ─────────────────────────────────────────────── */
@@ -337,6 +366,23 @@
     }
     .card-img img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.6s cubic-bezier(.22,1,.36,1); }
     .card:hover .card-img img { transform: scale(1.06); }
+
+    /* Video animado Higgsfield — autoplay al hover */
+    .card-img video {
+      position: absolute; inset: 0;
+      width: 100%; height: 100%; object-fit: cover;
+      opacity: 0; transition: opacity 0.5s ease;
+      z-index: 3; pointer-events: none;
+    }
+    .card:hover .card-img video { opacity: 1; }
+    .video-badge {
+      position: absolute; bottom: 10px; right: 10px; z-index: 6;
+      background: rgba(0,0,0,0.72); border: 1px solid rgba(212,175,55,0.40);
+      color: var(--gold); font-size: 0.52rem; font-weight: 600;
+      letter-spacing: 1.5px; text-transform: uppercase;
+      padding: 3px 8px; border-radius: var(--radius);
+      display: flex; align-items: center; gap: 4px;
+    }
 
     /* Product badge */
     .card-badge {
@@ -608,9 +654,10 @@
 </head>
 <body>
 
-<!-- Ambient orbs (subtle, gold only) -->
+<!-- Ambient orbs — gold, animated -->
 <div class="orb orb1"></div>
 <div class="orb orb2"></div>
+<div class="orb orb3"></div>
 
 <!-- ── Promo bar ───────────────────────────────────────────────── -->
 <div class="promo-bar">
@@ -870,7 +917,14 @@ function stockBadge(stock) {
 /* ── Render card ──────────────────────────────────────────────────────── */
 function renderCard(p) {
   const emoji   = CAT_EMOJI[p.category] || '✦';
-  const imgHtml = p.image_url ? `<img src="${p.image_url}" alt="${p.name}" loading="lazy" />` : emoji;
+  const imgHtml = p.image_url
+    ? `<img src="${p.image_url}" alt="${p.name}" loading="lazy" />`
+    : `<span style="font-size:3.2rem">${emoji}</span>`;
+  const videoHtml = p.video_url
+    ? `<video src="${p.video_url}" muted loop playsinline preload="none"
+         onmouseenter="this.play()" onmouseleave="this.pause();this.currentTime=0"></video>
+       <div class="video-badge">▶ ANIMADO</div>`
+    : '';
   const badge   = BADGES[p.sku];
   const rating  = RATINGS[p.sku] || '★★★★★ (12)';
   const vCount  = viewers(p.sku || p.id);
@@ -884,6 +938,7 @@ function renderCard(p) {
     <div class="card" id="card-${p.id}" data-id="${p.id}" data-cat="${p.category}">
       <div class="card-img">
         ${imgHtml}
+        ${videoHtml}
         ${badge ? `<div class="card-badge ${badge.cls}">${badge.txt}</div>` : ''}
         <div class="card-viewers"><span class="viewer-dot"></span>${vCount} viendo</div>
       </div>
@@ -975,9 +1030,11 @@ function openModal(p) {
   const disc   = discPct(p.price_sale, ref);
   const tags   = (p.keywords || []).slice(0, 6);
   document.getElementById('modal-content').innerHTML = `
-    <div class="modal-emoji">${p.image_url
-      ? `<img src="${p.image_url}" alt="${p.name}" style="width:100%;border-radius:2px;margin-bottom:8px">`
-      : emoji}</div>
+    <div class="modal-emoji">${p.video_url
+      ? `<video src="${p.video_url}" autoplay muted loop playsinline style="width:100%;border-radius:2px;margin-bottom:8px;max-height:260px;object-fit:cover"></video>`
+      : p.image_url
+        ? `<img src="${p.image_url}" alt="${p.name}" style="width:100%;border-radius:2px;margin-bottom:8px">`
+        : emoji}</div>
     <div class="modal-cat">${p.category.replace('_',' ')}</div>
     <div class="modal-name">${p.name}</div>
     <div class="modal-stars">${rating.split(' ')[0]} <span style="font-size:.70rem;color:var(--white-mute)">${rating.split(' ')[1]||''} reseñas</span></div>

@@ -39,7 +39,7 @@ async function getOrCreateUser (telegramUser) {
   if (existing) return { user: existing, isNew: false }
 
   const trialEnds = new Date()
-  trialEnds.setDate(trialEnds.getDate() + 7)
+  trialEnds.setDate(trialEnds.getDate() + 3)
 
   const { data: newUser, error } = await sb
     .from('remaju_users')
@@ -122,7 +122,7 @@ function createBot () {
         await ctx.replyWithHTML(
           `👋 <b>¡Hola ${user.first_name}!</b>\n\n` +
           `Bienvenido a <b>REMAJU Monitor</b> — alertas diarias de remates inmobiliarios en Lima.\n\n` +
-          `🕐 Tu cuenta está activa con <b>7 días de prueba gratuita</b>.\n\n` +
+          `🕐 Tu cuenta está activa con <b>3 días de prueba gratuita</b>.\n\n` +
           `Cada mañana recibirás propiedades en Lima bajo tu presupuesto, clasificadas por tier:\n` +
           `🔴 Super Ganga  ·  🟠 Muy Bueno  ·  🟡 Bueno  ·  🟢 Aceptable\n\n` +
           `<b>Comandos:</b>\n` +

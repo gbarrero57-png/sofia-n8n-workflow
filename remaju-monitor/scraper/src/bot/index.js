@@ -124,7 +124,7 @@ function createBot () {
           `¿Cuántas horas pierdes buscando remates en REMAJU? ¿Revisando la misma web una y otra vez, sin saber si ya salió algo nuevo?\n\n` +
           `<b>REMAJU Monitor</b> lo hace por ti.\n` +
           `Cada mañana te llega una lista personalizada con los mejores remates del día — solo los que encajan con tu presupuesto y distritos.\n\n` +
-          `🕐 <b>3 días de prueba gratuita</b> activados.\n\n` +
+          `⏳ <b>Solo 3 días de prueba gratuita</b> — aprovéchalos al máximo.\n\n` +
           `Propiedades clasificadas por precio:\n` +
           `🔴 Super Ganga  ·  🟠 Muy Bueno  ·  🟡 Bueno  ·  🟢 Aceptable\n\n` +
           `<b>Comandos:</b>\n` +

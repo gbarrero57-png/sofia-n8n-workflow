@@ -121,14 +121,21 @@ function createBot () {
       if (isNew) {
         await ctx.replyWithHTML(
           `👋 <b>¡Hola ${user.first_name}!</b>\n\n` +
-          `Bienvenido a <b>REMAJU Monitor</b> — alertas diarias de remates inmobiliarios en Lima.\n\n` +
-          `🕐 Tu cuenta está activa con <b>3 días de prueba gratuita</b>.\n\n` +
-          `Cada mañana recibirás propiedades en Lima bajo tu presupuesto, clasificadas por tier:\n` +
+          `¿Cuántas horas pierdes buscando remates en REMAJU? ¿Revisando la misma web una y otra vez, sin saber si ya salió algo nuevo?\n\n` +
+          `<b>REMAJU Monitor</b> lo hace por ti.\n` +
+          `Cada mañana te llega una lista personalizada con los mejores remates del día — solo los que encajan con tu presupuesto y distritos.\n\n` +
+          `🕐 <b>3 días de prueba gratuita</b> activados.\n\n` +
+          `Propiedades clasificadas por precio:\n` +
           `🔴 Super Ganga  ·  🟠 Muy Bueno  ·  🟡 Bueno  ·  🟢 Aceptable\n\n` +
           `<b>Comandos:</b>\n` +
-          `📊 /estado — ver tu suscripción y filtros\n` +
-          `⚙️ /filtros — personalizar alertas\n` +
-          `💳 /suscripcion — contratar plan mensual`
+          `❓ /ayuda — cómo funciona y cómo configurar\n` +
+          `⚙️ /filtros — personalizar tus alertas\n` +
+          `📊 /estado — ver tu suscripción\n` +
+          `💳 /suscripcion — contratar plan mensual`,
+          Markup.inlineKeyboard([
+            [Markup.button.callback('❓ ¿Cómo funciona?', 'ayuda:inicio')],
+            [Markup.button.callback('⚙️ Configurar mis filtros ahora', 'ayuda:filtros')]
+          ])
         )
 
         // Notificar al admin
@@ -143,6 +150,7 @@ function createBot () {
         await ctx.replyWithHTML(
           `👋 <b>¡Hola de nuevo, ${user.first_name}!</b>\n\n` +
           `${formatSubscriptionLine(user)}\n\n` +
+          `❓ /ayuda — cómo funciona y cómo configurar\n` +
           `📊 /estado — ver suscripción y filtros\n` +
           `💳 /suscripcion — contratar plan`
         )
@@ -225,6 +233,101 @@ function createBot () {
       logger.error('Error reenviando comprobante', { error: err.message })
       await ctx.reply('Hubo un error enviando el comprobante. Escríbele directamente al administrador.')
     }
+  })
+
+  // ── /ayuda — cómo funciona + guía de configuración ─────────────────────
+  const AYUDA_TEXTO = {
+    inicio:
+      `❓ <b>¿Cómo funciona REMAJU Monitor?</b>\n\n` +
+      `Cada día a las <b>7:00 AM</b> revisamos todos los remates publicados en remaju.pe.\n\n` +
+      `Solo te enviamos los que cumplen <b>tus filtros</b>:\n` +
+      `• Precio máximo en USD\n` +
+      `• Tipo de propiedad (casa, dpto, terreno…)\n` +
+      `• Categoría de precio (Super Ganga, Muy Bueno…)\n` +
+      `• Distrito o región del Perú\n\n` +
+      `Si no hay nada nuevo, igual te avisamos para que sepas que estamos vigilando.\n\n` +
+      `<b>Categorías de precio:</b>\n` +
+      `🔴 <b>Super Ganga</b> — menos de $40,000 USD\n` +
+      `🟠 <b>Muy Bueno</b> — $40,000 – $60,000 USD\n` +
+      `🟡 <b>Bueno</b> — $60,000 – $75,000 USD\n` +
+      `🟢 <b>Aceptable</b> — $75,000 – $90,000 USD`,
+
+    filtros:
+      `⚙️ <b>Cómo configurar tus filtros</b>\n\n` +
+      `Usa el comando /filtros para personalizar qué remates recibes.\n\n` +
+      `<b>1️⃣ Precio máximo</b>\n` +
+      `Elige el tope en dólares. Solo verás propiedades por debajo de ese precio. Puedes escribir cualquier monto personalizado.\n\n` +
+      `<b>2️⃣ Tipo de propiedad</b>\n` +
+      `Activa o desactiva: Casa, Departamento, Terreno, Local/Oficina u Otro. Puedes combinarlos.\n\n` +
+      `<b>3️⃣ Categorías (tiers)</b>\n` +
+      `Filtra por rango de precio relativo. Útil si solo te interesan las súper gangas o si buscas algo más amplio.\n\n` +
+      `<b>4️⃣ Distritos</b>\n` +
+      `Elige los distritos de Lima que te interesan, o explora todas las regiones del Perú. Sin selección = recibes de todo el país.\n\n` +
+      `💡 <b>Consejo:</b> empieza con el precio máximo y los distritos que conoces — eso tiene el mayor impacto en la cantidad de alertas.`
+  }
+
+  async function sendAyuda (ctx, tipo) {
+    const texto = AYUDA_TEXTO[tipo] || AYUDA_TEXTO.inicio
+    const otroTipo  = tipo === 'inicio' ? 'filtros' : 'inicio'
+    const otroLabel = tipo === 'inicio' ? '⚙️ Cómo configurar filtros' : '❓ Cómo funciona'
+    const kb = Markup.inlineKeyboard([
+      [Markup.button.callback(otroLabel, `ayuda:${otroTipo}`)],
+      [Markup.button.callback('⚙️ Ir a mis filtros', 'ayuda:ir_filtros')]
+    ])
+    return { texto, kb }
+  }
+
+  bot.command('ayuda', async (ctx) => {
+    const { texto, kb } = await sendAyuda(ctx, 'inicio')
+    await ctx.replyWithHTML(texto, kb)
+  })
+
+  bot.action('ayuda:inicio', async (ctx) => {
+    await ctx.answerCbQuery()
+    const { texto, kb } = await sendAyuda(ctx, 'inicio')
+    try {
+      await ctx.editMessageText(texto, { parse_mode: 'HTML', ...kb })
+    } catch (e) {
+      if (!e.message?.includes('message is not modified')) await ctx.replyWithHTML(texto, kb)
+    }
+  })
+
+  bot.action('ayuda:filtros', async (ctx) => {
+    await ctx.answerCbQuery()
+    const { texto, kb } = await sendAyuda(ctx, 'filtros')
+    try {
+      await ctx.editMessageText(texto, { parse_mode: 'HTML', ...kb })
+    } catch (e) {
+      if (!e.message?.includes('message is not modified')) await ctx.replyWithHTML(texto, kb)
+    }
+  })
+
+  bot.action('ayuda:ir_filtros', async (ctx) => {
+    await ctx.answerCbQuery()
+    const sb = getSupabase()
+    const { data: user } = await sb.from('remaju_users').select('id').eq('telegram_id', ctx.from.id).single()
+    if (!user) return ctx.reply('Usa /start primero.')
+    const { data: f } = await sb.from('remaju_filters').select('*').eq('user_id', user.id).single()
+    const maxPrice  = f?.max_price_usd  || 90000
+    const types     = f?.property_types || ['casa','departamento','terreno','local','otro']
+    const tiers     = f?.tiers          || ['super_ganga','muy_bueno','bueno','aceptable']
+    const districts = f?.districts      || []
+    const tierLabels = { super_ganga: '🔴 Super Ganga', muy_bueno: '🟠 Muy Bueno', bueno: '🟡 Bueno', aceptable: '🟢 Aceptable' }
+    await ctx.replyWithHTML(
+      `⚙️ <b>Mis Filtros</b>\n\n` +
+      `💰 Precio máx: <b>$${maxPrice.toLocaleString()} USD</b>\n` +
+      `🏠 Tipos: <b>${types.length === 5 ? 'Todos' : types.join(', ')}</b>\n` +
+      `📊 Tiers: <b>${tiers.map(t => tierLabels[t] || t).join(', ')}</b>\n` +
+      `📍 Distritos: <b>${districts.length ? districts.slice(0,4).join(', ') + (districts.length > 4 ? '...' : '') : 'Todo el Perú'}</b>\n\n` +
+      `¿Qué quieres cambiar?`,
+      Markup.inlineKeyboard([
+        [Markup.button.callback('💰 Precio máximo', 'filt:precio')],
+        [Markup.button.callback('🏠 Tipo de propiedad', 'filt:tipo')],
+        [Markup.button.callback('📊 Tiers / categorías', 'filt:tiers')],
+        [Markup.button.callback('📍 Distritos', 'filt:distritos')],
+        [Markup.button.callback('✅ Listo', 'filt:done')]
+      ])
+    )
   })
 
   // ── /filtros — menú principal de configuración ──────────────────────────
@@ -769,6 +872,7 @@ function createBot () {
 
     await ctx.replyWithHTML(
       `Usa los comandos para interactuar:\n\n` +
+      `❓ /ayuda — cómo funciona y cómo configurar\n` +
       `📊 /estado — ver tu suscripción\n` +
       `⚙️ /filtros — personalizar alertas\n` +
       `💳 /suscripcion — ver opciones de pago\n\n` +

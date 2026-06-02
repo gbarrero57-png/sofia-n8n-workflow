@@ -1,0 +1,29 @@
+{
+  "name": "remaju-scraper",
+  "version": "1.0.0",
+  "description": "Microservicio de scraping para remates REMAJU - Poder Judicial Peru",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "scrape": "node src/cli.js",
+    "init-db": "node src/database/init.js",
+    "test-scraper": "node src/scrapers/remaju/test.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.105.4",
+    "better-sqlite3": "^9.6.0",
+    "proxy-chain": "^2.5.9",
+    "socks": "^2.8.3",
+    "socks-proxy-agent": "^8.0.4",
+    "axios": "^1.7.2",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "playwright": "^1.44.0",
+    "playwright-extra": "^4.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "telegraf": "^4.16.3",
+    "uuid": "^10.0.0",
+    "winston": "^3.13.0"
+  }
+}

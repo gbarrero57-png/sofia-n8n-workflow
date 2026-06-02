@@ -3,7 +3,9 @@
 -- Capa 3: tabla para almacenar respuestas NPS de pacientes
 -- ============================================================
 
-CREATE TABLE IF NOT EXISTS public.nps_responses (
+DROP TABLE IF EXISTS public.nps_responses CASCADE;
+
+CREATE TABLE public.nps_responses (
     id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     clinic_id        UUID        NOT NULL REFERENCES public.clinics(id) ON DELETE CASCADE,
     patient_phone    TEXT        NOT NULL,
@@ -31,7 +33,7 @@ CREATE POLICY "clinic_admin_full" ON public.nps_responses
     USING (
         clinic_id IN (
             SELECT clinic_id FROM public.staff
-            WHERE user_id = auth.uid() AND role IN ('admin','owner')
+            WHERE user_id = auth.uid() AND role = 'admin'
         )
     );
 

@@ -1,0 +1,27 @@
+{
+  "default": {
+    "departments":    ["LIMA"],
+    "property_types": ["casa", "departamento", "terreno", "local"],
+    "max_price_usd":  90000,
+    "alert_threshold_usd": 88000,
+    "mode": "delta"
+  },
+  "tiers": {
+    "super_ganga": { "max": 40000, "emoji": "🔴", "label": "SUPER GANGA", "alert": "immediate" },
+    "muy_bueno":   { "max": 60000, "emoji": "🟠", "label": "MUY BUENO",   "alert": "immediate" },
+    "bueno":       { "max": 75000, "emoji": "🟡", "label": "BUENO",       "alert": "immediate" },
+    "aceptable":   { "max": 90000, "emoji": "🟢", "label": "ACEPTABLE",   "alert": "digest_only" }
+  },
+  "anti_spam": {
+    "max_alerts_per_property_per_day": 1,
+    "digest_threshold": 8,
+    "silent_hours_start": 22,
+    "silent_hours_end": 7,
+    "price_drop_min_pct": 5
+  },
+  "schedule": {
+    "main_cron": "0 11 * * *",
+    "digest_cron": "0 12 1 * *",
+    "health_cron": "0 */6 * * *"
+  }
+}

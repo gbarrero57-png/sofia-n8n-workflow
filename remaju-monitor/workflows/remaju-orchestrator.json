@@ -1,0 +1,236 @@
+{
+  "name": "REMAJU Monitor — Orquestador Principal",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "cronExpression", "expression": "0 11 * * *" }]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "CRON 6AM Lima",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300],
+      "notes": "Ejecuta cada día a las 6 AM Lima (11:00 UTC)"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.REMAJU_SCRAPER_URL }}/scrape",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Content-Type", "value": "application/json" }]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "source", "value": "remaju" },
+            { "name": "mode",   "value": "delta" },
+            { "name": "filters", "value": "={ \"departments\": [\"LIMA\"], \"max_price_usd\": 95000 }" }
+          ]
+        },
+        "options": { "timeout": 10000 }
+      },
+      "id": "trigger-scraper",
+      "name": "Iniciar Scraper",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "amount": 2,
+        "unit": "minutes"
+      },
+      "id": "wait-1",
+      "name": "Esperar 2 min",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [680, 300],
+      "notes": "Dar tiempo al scraper para completar el run inicial"
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.REMAJU_SCRAPER_URL }}/results/{{ $('Iniciar Scraper').item.json.run_id }}",
+        "options": { "timeout": 10000 }
+      },
+      "id": "poll-results",
+      "name": "Consultar Resultados",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.status }}",
+              "operation": "equals",
+              "value2": "running"
+            }
+          ]
+        }
+      },
+      "id": "check-status",
+      "name": "¿Todavía corriendo?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "amount": 5,
+        "unit": "minutes"
+      },
+      "id": "wait-more",
+      "name": "Esperar 5 min más",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [1340, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Filtrar propiedades nuevas que califican para alerta\nconst data = $input.first().json.data || []\nconst run  = $input.first().json.run  || {}\n\nconst qualifying = data.filter(a => {\n  if (!a.price_usd) return false\n  if (a.price_usd > 90000) return false\n  if (a.location_department && !a.location_department.includes('LIMA') && !a.location_department.includes('CALLAO')) return false\n  return true\n}).sort((a, b) => (a.price_usd || 0) - (b.price_usd || 0))\n\nconst stats = {\n  total:       data.length,\n  qualifying:  qualifying.length,\n  new_records: run.new_records || 0,\n  pages:       run.pages_scraped || 0,\n  duration_ms: run.duration_ms || 0\n}\n\nreturn [{ json: { qualifying, stats, run_id: $input.first().json.run_id } }]"
+      },
+      "id": "filter-data",
+      "name": "Filtrar y Clasificar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1340, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.stats.qualifying }}",
+              "operation": "largerEqual",
+              "value2": 1
+            }
+          ]
+        }
+      },
+      "id": "check-qualifying",
+      "name": "¿Hay propiedades?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1560, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.stats.qualifying }}",
+              "operation": "larger",
+              "value2": 8
+            }
+          ]
+        }
+      },
+      "id": "check-many",
+      "name": "¿Más de 8 propiedades?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1780, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Construir digest cuando hay muchas propiedades\nconst { qualifying, stats } = $input.first().json\n\nconst tierCount = { super_ganga: 0, muy_bueno: 0, bueno: 0, aceptable: 0 }\nqualifying.forEach(a => { if (a.price_usd_tier) tierCount[a.price_usd_tier]++ })\n\nconst date = new Date().toLocaleDateString('es-PE', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Lima' })\n\nlet msg = `📊 *RESUMEN DIARIO REMAJU*\\n`\nmsg += `━━━━━━━━━━━━━━━━━━━━━━\\n`\nmsg += `🗓  ${date}\\n\\n`\nmsg += `*${qualifying.length} nuevas propiedades < $90k USD*\\n\\n`\nif (tierCount.super_ganga) msg += `🔴 Super Ganga (< $40k): ${tierCount.super_ganga}\\n`\nif (tierCount.muy_bueno)   msg += `🟠 Muy Bueno  ($40-60k): ${tierCount.muy_bueno}\\n`\nif (tierCount.bueno)       msg += `🟡 Bueno      ($60-75k): ${tierCount.bueno}\\n`\nif (tierCount.aceptable)   msg += `🟢 Aceptable  ($75-90k): ${tierCount.aceptable}\\n`\n\n// Top 3\nconst top3 = qualifying.slice(0, 3)\nmsg += `\\n*🏆 Top 3 más económicas:*\\n`\ntop3.forEach((a, i) => {\n  const usd  = `$${Math.round(a.price_usd).toLocaleString('es-PE')}`\n  const dist = a.location_district || a.location_department || 'Lima'\n  const tipo = (a.property_type || 'inmueble').charAt(0).toUpperCase() + (a.property_type || 'inmueble').slice(1)\n  msg += `${i+1}. ${usd} — ${tipo} en ${dist}\\n`\n})\n\nif (stats.pages) msg += `\\n_Páginas revisadas: ${stats.pages} | ${Math.round(stats.duration_ms/60000)} min_`\n\nreturn [{ json: { text: msg, parse_mode: 'Markdown' } }]"
+      },
+      "id": "build-digest",
+      "name": "Construir Digest",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2000, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Construir mensajes individuales por propiedad\nconst { qualifying } = $input.first().json\n\nconst TIER_EMOJI  = { super_ganga:'🔴', muy_bueno:'🟠', bueno:'🟡', aceptable:'🟢' }\nconst TIER_LABEL  = { super_ganga:'SUPER GANGA', muy_bueno:'MUY BUENO', bueno:'BUENO', aceptable:'ACEPTABLE' }\nconst TYPE_EMOJI  = { casa:'🏠', departamento:'🏢', terreno:'🌿', local:'🏪', otro:'🏗️' }\n\nreturn qualifying.map(a => {\n  const tier  = a.price_usd_tier || 'aceptable'\n  const emoji = TIER_EMOJI[tier] || '🟢'\n  const label = TIER_LABEL[tier] || ''\n  const typeE = TYPE_EMOJI[a.property_type] || '🏗️'\n\n  const usd   = `$${Math.round(a.price_usd).toLocaleString('es-PE')}`\n  const pen   = a.currency_original === 'PEN' ? `S/ ${Math.round(a.price_original).toLocaleString('es-PE')}  ≈  ` : ''\n  const phase = a.auction_phase ? a.auction_phase.includes('SEGUNDA') ? ' · 2da Conv ↓15%' : a.auction_phase.includes('TERCERA') ? ' · 3ra Conv ↓30%' : '' : ''\n\n  let text = `${emoji} *REMATE LIMA — ${label}*\\n`\n  text += `━━━━━━━━━━━━━━━━━━━━━━\\n`\n  text += `💰  ${pen}*${usd}*\\n`\n  if (a.exchange_rate) text += `💱  TC: S/ ${parseFloat(a.exchange_rate).toFixed(2)}/USD\\n`\n  if (a.location_district) text += `📍  ${a.location_district}, Lima\\n`\n  text += `${typeE}  ${(a.property_type||'inmueble').charAt(0).toUpperCase()}${(a.property_type||'inmueble').slice(1)}${phase}\\n`\n  if (a.area_m2) {\n    const m2 = Math.round(a.price_usd / a.area_m2)\n    text += `📐  ${a.area_m2} m²  ·  $${m2}/m²\\n`\n  }\n  if (a.expediente) text += `📋  \\`${a.expediente}\\`\\n`\n  if (a.juzgado)    text += `⚖️  ${a.juzgado}\\n`\n  if (a.auction_date) {\n    const days = Math.ceil((new Date(a.auction_date) - new Date()) / 86400000)\n    const urgency = days <= 7 ? ` ⚡ ¡${days} días!` : ` (${days} días)`\n    text += `📅  Remate: ${a.auction_date}${urgency}\\n`\n  }\n  if (a.detail_url) text += `\\n[🔗 Ver en REMAJU](${a.detail_url})\\n`\n\n  const tags = [`#${tier}`, '#Lima', a.property_type ? `#${a.property_type}` : '', a.location_district ? `#${a.location_district.replace(/\\s+/g,'')}` : ''].filter(Boolean)\n  text += `\\n${tags.join(' ')}`\n\n  return { json: { text, parse_mode: 'Markdown', auction_id: a.id } }\n})"
+      },
+      "id": "build-individual",
+      "name": "Construir Mensajes Individuales",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2000, 400]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "parse_mode": "Markdown",
+          "disable_web_page_preview": false
+        }
+      },
+      "id": "send-digest",
+      "name": "Enviar Digest Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [2220, 200],
+      "credentials": { "telegramApi": { "id": "", "name": "Telegram REMAJU Bot" } }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "parse_mode": "Markdown",
+          "disable_web_page_preview": false
+        }
+      },
+      "id": "send-individual",
+      "name": "Enviar Alerta Individual",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [2220, 400],
+      "credentials": { "telegramApi": { "id": "", "name": "Telegram REMAJU Bot" } }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "✅ *REMAJU Monitor*\n━━━━━━━━━━━━━━━━━━\nScraping completado sin propiedades nuevas < $90k USD hoy.\n\n_{{ new Date().toLocaleString('es-PE', { timeZone: 'America/Lima' }) }}_",
+        "additionalFields": { "parse_mode": "Markdown" }
+      },
+      "id": "send-no-results",
+      "name": "Notificar Sin Resultados",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [1780, 500],
+      "credentials": { "telegramApi": { "id": "", "name": "Telegram REMAJU Bot" } }
+    }
+  ],
+  "connections": {
+    "CRON 6AM Lima":          { "main": [[{ "node": "Iniciar Scraper",              "type": "main", "index": 0 }]] },
+    "Iniciar Scraper":        { "main": [[{ "node": "Esperar 2 min",                "type": "main", "index": 0 }]] },
+    "Esperar 2 min":          { "main": [[{ "node": "Consultar Resultados",         "type": "main", "index": 0 }]] },
+    "Consultar Resultados":   { "main": [[{ "node": "¿Todavía corriendo?",          "type": "main", "index": 0 }]] },
+    "¿Todavía corriendo?":    {
+      "main": [
+        [{ "node": "Esperar 5 min más",           "type": "main", "index": 0 }],
+        [{ "node": "Filtrar y Clasificar",        "type": "main", "index": 0 }]
+      ]
+    },
+    "Esperar 5 min más":      { "main": [[{ "node": "Consultar Resultados",         "type": "main", "index": 0 }]] },
+    "Filtrar y Clasificar":   { "main": [[{ "node": "¿Hay propiedades?",            "type": "main", "index": 0 }]] },
+    "¿Hay propiedades?":      {
+      "main": [
+        [{ "node": "¿Más de 8 propiedades?",      "type": "main", "index": 0 }],
+        [{ "node": "Notificar Sin Resultados",    "type": "main", "index": 0 }]
+      ]
+    },
+    "¿Más de 8 propiedades?": {
+      "main": [
+        [{ "node": "Construir Digest",            "type": "main", "index": 0 }],
+        [{ "node": "Construir Mensajes Individuales", "type": "main", "index": 0 }]
+      ]
+    },
+    "Construir Digest":                  { "main": [[{ "node": "Enviar Digest Telegram",   "type": "main", "index": 0 }]] },
+    "Construir Mensajes Individuales":   { "main": [[{ "node": "Enviar Alerta Individual",  "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "staticData": null,
+  "tags": ["remaju", "proptech", "alertas"]
+}

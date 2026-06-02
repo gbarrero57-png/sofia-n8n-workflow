@@ -4,6 +4,8 @@ n8n-skills/
 
 ### Secrets
 saas/.env
+remaju-monitor/scraper/.env
+remaju-monitor/data/
 **/credentials*.json
 **/*.key
 **/*.pem
@@ -55,3 +57,40 @@ supabase/.temp/
 favicons/
 
 .vercel
+
+### algebra-bot: operational patch scripts (one-time runs, contain hardcoded credentials)
+algebra-bot/patch_*.py
+algebra-bot/fix_*.py
+algebra-bot/deploy_*.py
+algebra-bot/inject_*.py
+algebra-bot/update_price.py
+algebra-bot/test_deepseek.py
+algebra-bot/token_count_real.py
+algebra-bot/_verify_patch.py
+
+### algebra-bot: runtime artifacts with credentials
+algebra-bot/workflows/
+algebra-bot/cron_expiry.json
+algebra-bot/debug_preverify.json
+algebra-bot/e2e_report.json
+algebra-bot/test_report.json
+algebra-bot/e2e_results*.json
+algebra-bot/migrations/
+
+### algebra-bot: build artifacts and binaries
+algebra-bot/*.zip
+algebra-bot/word-generator/*.zip
+
+### algebra-bot: debug/temp files
+algebra-bot/*_probs.txt
+algebra-bot/build_*.txt
+algebra-bot/extraer_node.txt
+
+### wf_nodes: exported n8n nodes with hardcoded credentials (source of truth is n8n cloud)
+wf_nodes/
+
+### Other files with credentials
+expir_wf.txt
+build_openai_node.txt
+test_output.docx
+test_results.json

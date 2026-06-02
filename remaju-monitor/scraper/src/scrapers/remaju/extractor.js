@@ -17,12 +17,12 @@ async function extractPage (page) {
       const remateNum   = remateMatch ? remateMatch[1] : null
       const convocatoria = remateMatch ? remateMatch[2].trim() : null
 
-      // Precio — "S/. 23,785.60" o "$ 46,645.33" o "S/ 23,785.60"
-      const priceMatch = text.match(/(?:S\/\.?\s*|PEN\s*)([\d,\.]+)|(?:\$\s*|USD\s*)([\d,\.]+)/i)
+      // Precio — "S/. 23,785.60" o "$ 46,645.33" o "S/. 615, 777. 23" (con espacios)
+      const priceMatch = text.match(/(?:S\/\.?\s*|PEN\s*)([\d,\.\s]+)|(?:\$\s*|USD\s*)([\d,\.]+)/i)
       let priceAmount  = null
       let currency     = 'PEN'
       if (priceMatch) {
-        const raw = (priceMatch[1] || priceMatch[2] || '').replace(/,/g, '')
+        const raw = (priceMatch[1] || priceMatch[2] || '').replace(/\s/g, '').replace(/,/g, '')
         priceAmount = parseFloat(raw)
         currency    = priceMatch[2] ? 'USD' : 'PEN'
       }

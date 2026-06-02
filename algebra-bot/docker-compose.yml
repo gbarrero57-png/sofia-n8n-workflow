@@ -1,0 +1,16 @@
+version: "3.8"
+
+services:
+  word-generator:
+    build: ./word-generator
+    container_name: algebra-word-gen
+    restart: unless-stopped
+    ports:
+      - "5050:5000"   # host:container — acceder en http://localhost:5050
+    environment:
+      - PYTHONUNBUFFERED=1
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

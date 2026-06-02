@@ -1,6 +1,6 @@
 {
   "name": "SofIA - Birthday Messages",
-  "active": false,
+  "active": true,
   "nodes": [
     {
       "parameters": {
@@ -16,7 +16,10 @@
       "name": "Cron Trigger 9AM",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [0, 0],
+      "position": [
+        0,
+        0
+      ],
       "id": "a1b2c3d4-0001-0001-0001-000000000001"
     },
     {
@@ -26,13 +29,24 @@
       "name": "Send Birthday Messages",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [220, 0],
+      "position": [
+        220,
+        0
+      ],
       "id": "a1b2c3d4-0001-0001-0001-000000000002"
     }
   ],
   "connections": {
     "Cron Trigger 9AM": {
-      "main": [[{ "node": "Send Birthday Messages", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Send Birthday Messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {

@@ -1,0 +1,239 @@
+{
+  "name": "SofIA — Carrusel IG: Por qué dentistas necesitan SofIA",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "node-001",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [200, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 7 slides: Por qué los odontólogos necesitan SofIA\nconst caption = '¿Sabías que el 68% de pacientes elige la primera clínica que le responde? 🦷\\n\\nSofIA trabaja 24/7 por WhatsApp: agenda citas, envía recordatorios y nunca pierde un paciente.\\n\\n💬 Escríbenos por DM para una demo gratuita.\\n\\n#OdontologíaDigital #ClínicaDental #IA #SofIADentAI #AutomatizaciónDental #WhatsAppBusiness #DentistasPerú';\n\nreturn [\n  { json: { slide: 1, titulo: '¿Tu clínica pierde pacientes por no responder a tiempo?', subtitulo: 'El 68% elige la primera clínica que le responde.', emoji: '🦷', caption } },\n  { json: { slide: 2, titulo: 'Los pacientes mandan WhatsApp a las 10pm.', subtitulo: '¿Quién responde por ti cuando cierras la clínica?', emoji: '📱', caption } },\n  { json: { slide: 3, titulo: 'SofIA responde 24/7 por WhatsApp.', subtitulo: 'Agenda citas, resuelve dudas y filtra pacientes — incluso mientras duermes.', emoji: '🤖', caption } },\n  { json: { slide: 4, titulo: 'Menos no-shows, más ingresos.', subtitulo: 'Recordatorios automáticos 24h antes. Confirmación de asistencia sin llamadas.', emoji: '📅', caption } },\n  { json: { slide: 5, titulo: 'Tu reputación crece sola.', subtitulo: 'Encuestas NPS automáticas post-cita que generan reseñas positivas en Google.', emoji: '⭐', caption } },\n  { json: { slide: 6, titulo: 'Clínicas con SofIA ven +40% en citas agendadas.', subtitulo: 'Sin contratar más personal. Solo automatizando lo que ya hacías a mano.', emoji: '📈', caption } },\n  { json: { slide: 7, titulo: '¿Listo para una asistente IA en tu clínica?', subtitulo: 'Escríbenos por DM y accede a la demo gratuita. 👇', emoji: '✨', caption } }\n];"
+      },
+      "id": "node-002",
+      "name": "Slides Content",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [420, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.placid.app/api/rest/images",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer placid-tjyfszkjr9kqyfct-ybqrbhowrx2ct9tx" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={{ JSON.stringify({ template_uuid: 'lf7cxdnzrziuh', layers: { titulo: { text: $json.emoji + ' ' + $json.titulo }, subtitulo: { text: $json.subtitulo }, numero: { text: 'Slide ' + $json.slide } } }) }}",
+        "options": {}
+      },
+      "id": "node-003",
+      "name": "Placid — Generar Imagen",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [640, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Guardar slide index y poll_url para recuperar la imagen\nconst placid = $input.first().json;\nreturn [{ json: { poll_url: placid.poll_url, image_url: placid.image_url || null, status: placid.status } }];"
+      },
+      "id": "node-004",
+      "name": "Guardar Poll URL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [860, 400]
+    },
+    {
+      "parameters": {
+        "amount": 10,
+        "unit": "seconds"
+      },
+      "id": "node-005",
+      "name": "Wait 10s",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [1080, 400],
+      "webhookId": "wait-uuid-001"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.poll_url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer placid-tjyfszkjr9kqyfct-ybqrbhowrx2ct9tx" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-006",
+      "name": "Poll — Obtener Image URL",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1300, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v21.0/17841427354737238/media",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer EAAdWmbwxT1wBRZA4dtdHM4LpQ7vc3aeJ6UpsyTeafAdG3dZC5ZBZAF8YwHb3EDd7ZB2BBtU5WZAZAzZCUihZBZBTXy961lIx1n6uZCZAZCpFigWWIgXiKoauhCNrr4NcAccDB8xBYdXM6p0VD3XRV78iwirWgzRBL1ZBL3crkZCGPuOl83K03lih8owstH5EpkKPx3LSS4BXvI3" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "image_url", "value": "={{ $json.image_url }}" },
+            { "name": "is_carousel_item", "value": "true" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-007",
+      "name": "IG — Subir Slide como Carousel Item",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1520, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Agregar los 7 container IDs y armar el payload del carousel\nconst items = $input.all();\nconst containerIds = items.map(i => i.json.id).filter(Boolean);\n\nif (containerIds.length < 2) {\n  throw new Error('Se necesitan al menos 2 slides. Solo se generaron: ' + containerIds.length);\n}\n\nconst caption = '¿Sabías que el 68% de pacientes elige la primera clínica que le responde? 🦷\\n\\nSofIA trabaja 24/7 por WhatsApp: agenda citas, envía recordatorios y nunca pierde un paciente.\\n\\n💬 Escríbenos por DM para una demo gratuita.\\n\\n#OdontologíaDigital #ClínicaDental #IA #SofIADentAI #AutomatizaciónDental #WhatsAppBusiness #DentistasPerú';\n\nreturn [{ json: { children: containerIds.join(','), caption, count: containerIds.length } }];"
+      },
+      "id": "node-008",
+      "name": "Agregar Containers",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1740, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v21.0/17841427354737238/media",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer EAAdWmbwxT1wBRZA4dtdHM4LpQ7vc3aeJ6UpsyTeafAdG3dZC5ZBZAF8YwHb3EDd7ZB2BBtU5WZAZAzZCUihZBZBTXy961lIx1n6uZCZAZCpFigWWIgXiKoauhCNrr4NcAccDB8xBYdXM6p0VD3XRV78iwirWgzRBL1ZBL3crkZCGPuOl83K03lih8owstH5EpkKPx3LSS4BXvI3" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "media_type", "value": "CAROUSEL" },
+            { "name": "children", "value": "={{ $json.children }}" },
+            { "name": "caption", "value": "={{ $json.caption }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-009",
+      "name": "IG — Crear Carousel Container",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1960, 400]
+    },
+    {
+      "parameters": {
+        "amount": 30,
+        "unit": "seconds"
+      },
+      "id": "node-010",
+      "name": "Wait 30s IG",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [2180, 400],
+      "webhookId": "wait-uuid-002"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v21.0/17841427354737238/media_publish",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer EAAdWmbwxT1wBRZA4dtdHM4LpQ7vc3aeJ6UpsyTeafAdG3dZC5ZBZAF8YwHb3EDd7ZB2BBtU5WZAZAzZCUihZBZBTXy961lIx1n6uZCZAZCpFigWWIgXiKoauhCNrr4NcAccDB8xBYdXM6p0VD3XRV78iwirWgzRBL1ZBL3crkZCGPuOl83K03lih8owstH5EpkKPx3LSS4BXvI3" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "creation_id", "value": "={{ $json.id }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-011",
+      "name": "IG — Publicar Carousel",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2400, 400]
+    },
+    {
+      "parameters": {
+        "chatId": "YOUR_TELEGRAM_CHAT_ID",
+        "text": "=✅ Carrusel publicado en @sofiadent.ai\n\nPost ID: {{ $json.id }}\n7 slides: Por qué dentistas necesitan SofIA 🦷",
+        "additionalFields": {}
+      },
+      "id": "node-012",
+      "name": "Telegram — Notificar",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [2620, 400],
+      "credentials": {
+        "telegramApi": {
+          "id": "cSaxAEvIePNLpINc",
+          "name": "Telegram account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [[{ "node": "Slides Content", "type": "main", "index": 0 }]]
+    },
+    "Slides Content": {
+      "main": [[{ "node": "Placid — Generar Imagen", "type": "main", "index": 0 }]]
+    },
+    "Placid — Generar Imagen": {
+      "main": [[{ "node": "Guardar Poll URL", "type": "main", "index": 0 }]]
+    },
+    "Guardar Poll URL": {
+      "main": [[{ "node": "Wait 10s", "type": "main", "index": 0 }]]
+    },
+    "Wait 10s": {
+      "main": [[{ "node": "Poll — Obtener Image URL", "type": "main", "index": 0 }]]
+    },
+    "Poll — Obtener Image URL": {
+      "main": [[{ "node": "IG — Subir Slide como Carousel Item", "type": "main", "index": 0 }]]
+    },
+    "IG — Subir Slide como Carousel Item": {
+      "main": [[{ "node": "Agregar Containers", "type": "main", "index": 0 }]]
+    },
+    "Agregar Containers": {
+      "main": [[{ "node": "IG — Crear Carousel Container", "type": "main", "index": 0 }]]
+    },
+    "IG — Crear Carousel Container": {
+      "main": [[{ "node": "Wait 30s IG", "type": "main", "index": 0 }]]
+    },
+    "Wait 30s IG": {
+      "main": [[{ "node": "IG — Publicar Carousel", "type": "main", "index": 0 }]]
+    },
+    "IG — Publicar Carousel": {
+      "main": [[{ "node": "Telegram — Notificar", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Lima"
+  }
+}

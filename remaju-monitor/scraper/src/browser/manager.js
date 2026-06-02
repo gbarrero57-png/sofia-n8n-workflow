@@ -40,7 +40,7 @@ async function getBrowser () {
 }
 
 async function newContext (browser) {
-  return browser.newContext({
+  const ctxOpts = {
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     viewport: { width: 1366, height: 768 },
     locale: 'es-PE',
@@ -51,7 +51,18 @@ async function newContext (browser) {
       'Cache-Control': 'max-age=0',
       'Connection': 'keep-alive'
     }
-  })
+  }
+
+  // HTTP proxy con auth nativa (iproyal.com residential)
+  const proxyServer = process.env.PROXY_SERVER
+  const proxyUser   = process.env.PROXY_USERNAME
+  const proxyPass   = process.env.PROXY_PASSWORD
+  if (proxyServer && proxyUser) {
+    ctxOpts.proxy = { server: proxyServer, username: proxyUser, password: proxyPass }
+    logger.info('Proxy configurado', { server: proxyServer })
+  }
+
+  return browser.newContext(ctxOpts)
 }
 
 async function closeBrowser () {

@@ -3,13 +3,23 @@
   "nodes": [
     {
       "parameters": {
-        "rule": { "interval": [{ "field": "cronExpression", "expression": "0 8 1 * *" }] }
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 1 * *"
+            }
+          ]
+        }
       },
       "id": "cron-monthly",
       "name": "Cron Día 1 del Mes",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [240, 300]
+      "position": [
+        240,
+        300
+      ]
     },
     {
       "parameters": {
@@ -19,28 +29,42 @@
       "name": "Obtener Clínicas",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [460, 300]
+      "position": [
+        460,
+        300
+      ]
     },
     {
       "parameters": {
-        "url": "https://sofia.redsolucionesti.com/api/admin/reports/generate",
+        "url": "https://sofia.redsolucionesti.com/api/cron/monthly-reports",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "Content-Type", "value": "application/json" },
-            { "name": "Cookie", "value": "sofia_token=internal-cron-token" }
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer sofia-cron-2026-a9f3e7b2c1d5-reports"
+            }
           ]
         },
         "sendBody": true,
         "contentType": "json",
         "body": "={{ JSON.stringify({ clinic_id: $json.clinic_id, month: $json.month }) }}",
-        "options": { "timeout": 60000 }
+        "options": {
+          "timeout": 60000
+        }
       },
       "id": "http-generate",
       "name": "Generar Reporte",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [680, 300]
+      "position": [
+        680,
+        300
+      ]
     },
     {
       "parameters": {
@@ -50,13 +74,48 @@
       "name": "Resumen",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [900, 300]
+      "position": [
+        900,
+        300
+      ]
     }
   ],
   "connections": {
-    "Cron Día 1 del Mes": { "main": [[{ "node": "Obtener Clínicas", "type": "main", "index": 0 }]] },
-    "Obtener Clínicas":   { "main": [[{ "node": "Generar Reporte",  "type": "main", "index": 0 }]] },
-    "Generar Reporte":    { "main": [[{ "node": "Resumen",          "type": "main", "index": 0 }]] }
+    "Cron Día 1 del Mes": {
+      "main": [
+        [
+          {
+            "node": "Obtener Clínicas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Obtener Clínicas": {
+      "main": [
+        [
+          {
+            "node": "Generar Reporte",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generar Reporte": {
+      "main": [
+        [
+          {
+            "node": "Resumen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   },
-  "settings": { "executionOrder": "v1" }
+  "settings": {
+    "executionOrder": "v1"
+  }
 }

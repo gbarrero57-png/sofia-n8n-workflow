@@ -91,21 +91,21 @@ ALTER TABLE public.nps_responses     ENABLE ROW LEVEL SECURITY;
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'patient_notes' AND policyname = 'notes_staff_access') THEN
     CREATE POLICY notes_staff_access ON public.patient_notes
-      USING (clinic_id IN (SELECT clinic_id FROM public.staff WHERE user_id = auth.uid() AND deleted_at IS NULL));
+      USING (clinic_id IN (SELECT clinic_id FROM public.staff WHERE user_id = auth.uid()));
   END IF;
 END $$;
 
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'patient_reminders' AND policyname = 'reminders_staff_access') THEN
     CREATE POLICY reminders_staff_access ON public.patient_reminders
-      USING (clinic_id IN (SELECT clinic_id FROM public.staff WHERE user_id = auth.uid() AND deleted_at IS NULL));
+      USING (clinic_id IN (SELECT clinic_id FROM public.staff WHERE user_id = auth.uid()));
   END IF;
 END $$;
 
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'nps_responses' AND policyname = 'nps_staff_access') THEN
     CREATE POLICY nps_staff_access ON public.nps_responses
-      USING (clinic_id IN (SELECT clinic_id FROM public.staff WHERE user_id = auth.uid() AND deleted_at IS NULL));
+      USING (clinic_id IN (SELECT clinic_id FROM public.staff WHERE user_id = auth.uid()));
   END IF;
 END $$;
 

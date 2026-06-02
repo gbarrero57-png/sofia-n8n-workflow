@@ -1,0 +1,208 @@
+{
+  "name": "SofIA - Social Media Responder (IG/FB)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "sofia-social",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000001",
+      "name": "Webhook Verify GET",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 240]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "sofia-social",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000002",
+      "name": "Webhook Events POST",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 480]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.query['hub.challenge'] }}",
+        "options": { "responseCode": 200 }
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000003",
+      "name": "Respond Challenge",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [480, 240]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "EVENT_RECEIVED",
+        "options": { "responseCode": 200 }
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000004",
+      "name": "Respond OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [480, 480]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body;\nif (!body || !body.entry) return [];\n\nconst events = [];\nfor (const entry of body.entry) {\n  if (entry.changes) {\n    for (const change of entry.changes) {\n      const v = change.value;\n      if (change.field === 'comments' && v.id) {\n        events.push({ json: { type: 'ig_comment', comment_id: v.id, text: v.text || '', from_id: (v.from||{}).id||null, from_name: (v.from||{}).name||null } });\n      }\n      if (change.field === 'feed' && v.item === 'comment' && v.verb === 'add') {\n        events.push({ json: { type: 'fb_comment', comment_id: v.comment_id, text: v.message || '', from_id: (v.from||{}).id||null, from_name: (v.from||{}).name||null } });\n      }\n    }\n  }\n  if (entry.messaging) {\n    for (const msg of entry.messaging) {\n      if (msg.message && !msg.message.is_echo) {\n        const platform = body.object === 'instagram' ? 'ig_dm' : 'fb_dm';\n        events.push({ json: { type: platform, sender_id: msg.sender.id, text: (msg.message.text||'').trim() } });\n      }\n    }\n  }\n}\nreturn events;"
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000005",
+      "name": "Parse Event",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [700, 480]
+    },
+    {
+      "parameters": {
+        "jsCode": "const t = $json.type;\nconst OUR_IG = '17841427354737238';\nconst OUR_PAGE = '1004836199387081';\nconst text = $json.text || '';\nif (!text || text.length < 2) return [];\nif (t === 'ig_comment' || t === 'fb_comment') {\n  if ($json.from_id === OUR_IG || $json.from_id === OUR_PAGE) return [];\n}\nif (t === 'ig_dm' || t === 'fb_dm') {\n  if ($json.sender_id === OUR_IG || $json.sender_id === OUR_PAGE) return [];\n}\nreturn [$input.first()];"
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000006",
+      "name": "Filter Self",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [920, 480]
+    },
+    {
+      "parameters": {
+        "jsCode": "const t = $json.type;\nconst isDM = t === 'ig_dm' || t === 'fb_dm';\n\nconst systemComment = `Eres SofIA, asistente virtual de SofIA Dent AI, clínica dental moderna en Lima.\nPersonalidad: amigable, profesional, empática. Respuestas MUY cortas (máx 2-3 líneas para comentarios públicos).\nServicios: blanqueamiento, ortodoncia (brackets/Invisalign), implantes, limpiezas, caries, endodoncia, odontopediatría.\nNUNCA des precios exactos en público. Invita siempre a escribir por DM o agendar cita.\nSi el mensaje es spam o irrelevante, responde SOLO con la palabra: SKIP`;\n\nconst systemDM = `Eres SofIA, asistente virtual de SofIA Dent AI, clínica dental moderna en Lima.\nPersonalidad: amigable, profesional, cálida. Respuestas conversacionales (máx 5-6 líneas).\nServicios: blanqueamiento (desde S/200), ortodoncia brackets (desde S/1,800), Invisalign, implantes, limpiezas, caries, endodoncia, odontopediatría.\nPara citas: WhatsApp +51 977 588 512. Horario: Lun-Sab 9am-6pm con previa cita.\nTermina siempre invitando a agendar o escribir al WhatsApp.`;\n\nconst userPrompt = isDM\n  ? `Mensaje directo: \"${$json.text}\"\\nResponde de forma útil y cálida.`\n  : `Comentario público: \"${$json.text}\"\\nResponde brevemente. Si es spam/irrelevante responde SKIP.`;\n\nreturn [{ json: { ...$json, system_prompt: isDM ? systemDM : systemComment, user_prompt: userPrompt, is_dm: isDM } }];"
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000007",
+      "name": "Build AI Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1140, 480]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{$env.OPENAI_API_KEY}}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={{ JSON.stringify({ model: 'gpt-4o', max_tokens: $json.is_dm ? 400 : 200, temperature: 0.7, messages: [{ role: 'system', content: $json.system_prompt }, { role: 'user', content: $json.user_prompt }] }) }}"
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000008",
+      "name": "OpenAI GPT-4o",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1360, 480]
+    },
+    {
+      "parameters": {
+        "jsCode": "const reply = ($json.choices[0].message.content || '').trim();\nif (reply.toUpperCase() === 'SKIP' || reply === '') return [];\n\n// Recover original event data from earlier node\nconst orig = $node['Build AI Prompt'].json;\n\nreturn [{ json: { reply, type: orig.type, comment_id: orig.comment_id || null, sender_id: orig.sender_id || null, is_dm: orig.is_dm } }];"
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000009",
+      "name": "Check Skip",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1580, 480]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.is_dm }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "true" }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000010",
+      "name": "Is DM?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1800, 480]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v21.0/{{ $json.type === 'ig_dm' ? '17841427354737238' : '1004836199387081' }}/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer EAAdWmbwxT1wBRZA4dtdHM4LpQ7vc3aeJ6UpsyTeafAdG3dZC5ZBZAF8YwHb3EDd7ZB2BBtU5WZAZAzZCUihZBZBTXy961lIx1n6uZCZAZCpFigWWIgXiKoauhCNrr4NcAccDB8xBYdXM6p0VD3XRV78iwirWgzRBL1ZBL3crkZCGPuOl83K03lih8owstH5EpkKPx3LSS4BXvI3" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={{ JSON.stringify({ recipient: { id: $json.sender_id }, message: { text: $json.reply } }) }}"
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000011",
+      "name": "Send DM Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2020, 380]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v21.0/{{ $json.comment_id }}/replies",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "message", "value": "={{ $json.reply }}" },
+            { "name": "access_token", "value": "EAAdWmbwxT1wBRZA4dtdHM4LpQ7vc3aeJ6UpsyTeafAdG3dZC5ZBZAF8YwHb3EDd7ZB2BBtU5WZAZAzZCUihZBZBTXy961lIx1n6uZCZAZCpFigWWIgXiKoauhCNrr4NcAccDB8xBYdXM6p0VD3XRV78iwirWgzRBL1ZBL3crkZCGPuOl83K03lih8owstH5EpkKPx3LSS4BXvI3" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000012",
+      "name": "Post Comment Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2020, 580]
+    }
+  ],
+  "connections": {
+    "Webhook Verify GET": {
+      "main": [[{ "node": "Respond Challenge", "type": "main", "index": 0 }]]
+    },
+    "Webhook Events POST": {
+      "main": [
+        [{ "node": "Respond OK", "type": "main", "index": 0 }],
+        [{ "node": "Parse Event", "type": "main", "index": 0 }]
+      ]
+    },
+    "Parse Event": {
+      "main": [[{ "node": "Filter Self", "type": "main", "index": 0 }]]
+    },
+    "Filter Self": {
+      "main": [[{ "node": "Build AI Prompt", "type": "main", "index": 0 }]]
+    },
+    "Build AI Prompt": {
+      "main": [[{ "node": "OpenAI GPT-4o", "type": "main", "index": 0 }]]
+    },
+    "OpenAI GPT-4o": {
+      "main": [[{ "node": "Check Skip", "type": "main", "index": 0 }]]
+    },
+    "Check Skip": {
+      "main": [[{ "node": "Is DM?", "type": "main", "index": 0 }]]
+    },
+    "Is DM?": {
+      "main": [
+        [{ "node": "Send DM Reply", "type": "main", "index": 0 }],
+        [{ "node": "Post Comment Reply", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": { "executionOrder": "v1" }
+}

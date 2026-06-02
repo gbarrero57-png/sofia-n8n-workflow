@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  scraper:
+    build: ./scraper
+    container_name: remaju-scraper
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./data:/app/../data        # DB SQLite persistente
+    environment:
+      PORT: 3001
+      LOG_LEVEL: info
+      BROWSER_HEADLESS: "true"
+      SCRAPER_RATE_LIMIT_MS: "2500"
+      SCRAPER_PAGE_TIMEOUT_MS: "30000"
+      SCRAPER_MAX_PAGES: "500"
+      DB_PATH: /data/remaju.db
+      N8N_CALLBACK_URL: ${N8N_CALLBACK_URL}
+      ADMIN_TELEGRAM_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      ADMIN_TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID}
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/health', r => process.exit(r.statusCode===200?0:1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

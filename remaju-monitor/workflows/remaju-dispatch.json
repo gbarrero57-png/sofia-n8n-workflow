@@ -1,0 +1,821 @@
+{
+  "updatedAt": "2026-05-23T13:05:41.634Z",
+  "createdAt": "2026-05-13T06:26:40.135Z",
+  "id": "HA9BS3KWHE3uIc5F",
+  "name": "REMAJU â€” Dispatch Diario",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "id": "n1",
+      "name": "CRON 7AM Lima",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        300
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 7 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "n4",
+      "name": "Obtener Subastas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        300
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "https://remaju-scraper.bzgfek.easypanel.host/auctions",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "max_price_usd",
+              "value": "10000000"
+            },
+            {
+              "name": "department",
+              "value": "LIMA"
+            },
+            {
+              "name": "limit",
+              "value": "500"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "n5",
+      "name": "Obtener Usuarios",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        300
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "https://rdjpkfcztnourihqpffe.supabase.co/rest/v1/remaju_users",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJkanBrZmN6dG5vdXJpaHFwZmZlIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3ODY0MTU0NCwiZXhwIjoyMDk0MjE3NTQ0fQ.UhX4I_06RIoqPVx9Gyw0W1U_ABobWUDlkYl16waZGjs"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJkanBrZmN6dG5vdXJpaHFwZmZlIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3ODY0MTU0NCwiZXhwIjoyMDk0MjE3NTQ0fQ.UhX4I_06RIoqPVx9Gyw0W1U_ABobWUDlkYl16waZGjs"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "select",
+              "value": "*,remaju_filters(*)"
+            },
+            {
+              "name": "active",
+              "value": "eq.true"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "n6",
+      "name": "Obtener AlertLog",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const SUP_URL = 'https://rdjpkfcztnourihqpffe.supabase.co'\nconst SUP_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJkanBrZmN6dG5vdXJpaHFwZmZlIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3ODY0MTU0NCwiZXhwIjoyMDk0MjE3NTQ0fQ.UhX4I_06RIoqPVx9Gyw0W1U_ABobWUDlkYl16waZGjs'\nconst since = new Date(Date.now() - 90*24*60*60*1000).toISOString()\n\nconst data = await this.helpers.httpRequest({\n  method: 'GET',\n  url: SUP_URL + '/rest/v1/remaju_alert_log?select=user_id,auction_external_id&sent_at=gte.' + since + '&limit=5000',\n  headers: { apikey: SUP_KEY, Authorization: 'Bearer ' + SUP_KEY }\n})\n\n// json debe ser objeto, no array — envolver en { data: [...] }\nreturn [{ json: { data: Array.isArray(data) ? data : [] } }]\n"
+      }
+    },
+    {
+      "id": "n7",
+      "name": "Preparar Despacho",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const auctions = $('Obtener Subastas').first().json.data || []\nconst users = $('Obtener Usuarios').all().map(item => item.json)\nconst alertLog = $('Obtener AlertLog').first().json.data || []\nconst sentSet = new Set(alertLog.map(l => l.user_id + ':' + l.auction_external_id))\nconst TIER_EMOJI = { super_ganga: '🔴', muy_bueno: '🟠', bueno: '🟡', aceptable: '🟢' }\nconst TIER_LABEL = { super_ganga: 'Super Ganga', muy_bueno: 'Muy Bueno', bueno: 'Bueno', aceptable: 'Aceptable' }\nconst GOTO_URL = 'https://remaju-scraper.bzgfek.easypanel.host/goto/'\nconst results = []\nfor (const user of users) {\n  const now = new Date()\n  const isActive = user.subscription_status === 'active'\n    ? (!user.subscription_ends_at || new Date(user.subscription_ends_at) > now)\n    : user.subscription_status === 'trial'\n      ? (!user.trial_ends_at || new Date(user.trial_ends_at) > now)\n      : false\n  if (!isActive) continue\n  const rawF = user.remaju_filters || {}\n  const f = Array.isArray(rawF) ? (rawF[0] || {}) : rawF\n  const maxPrice  = f.max_price_usd  || 90000\n  const tiers     = f.tiers          || ['super_ganga','muy_bueno','bueno','aceptable']\n  const types     = f.property_types || ['casa','departamento','terreno','local','otro']\n  const districts = f.districts      || []\n  // Solo propiedades vistas por primera vez HOY — evita reenviar acumulados históricos\n  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' }) // 'YYYY-MM-DD'\n  const todayMidnightUTC = new Date(todayStr + 'T05:00:00Z') // medianoche Lima en UTC\n\n  let matching = auctions.filter(a => {\n    if (!a.price_usd || a.price_usd > maxPrice) return false\n    if (!tiers.includes(a.price_usd_tier)) return false\n    if (!types.includes(a.property_type)) return false\n    if (districts.length) {\n      const NORM = s => s.normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase()\n      const ALIAS = { 'SMP':'SAN MARTIN DE PORRES','VES':'VILLA EL SALVADOR','VMT':'VILLA MARIA DEL TRIUNFO','SJL':'SAN JUAN DE LURIGANCHO','CDB':'CERCADO DE LIMA','SJM':'SAN JUAN DE MIRAFLORES' }\n      const expandAlias = d => ALIAS[NORM(d)] || NORM(d)\n      const distRaw = NORM(a.location_district || a.location_raw || '')\n      if (!distRaw) return false\n      if (!districts.some(d => distRaw.includes(expandAlias(d)) || expandAlias(d).includes(distRaw))) return false\n    }\n    if (sentSet.has(user.id + ':' + a.external_id)) return false\n    // Solo propiedades genuinamente nuevas hoy\n    if (!a.first_seen_at || new Date(a.first_seen_at) < todayMidnightUTC) return false\n    return true\n  })\n  matching.sort((a, b) => (a.price_usd || 0) - (b.price_usd || 0))\n  matching = matching.slice(0, 8)\n  const today = new Date().toLocaleDateString('es-PE', {day:'2-digit', month:'2-digit', year:'numeric'})\n  let message, records\n  if (matching.length === 0) {\n    // Notificar al usuario que hoy no hay propiedades nuevas para sus filtros\n    const distStr = districts.length ? districts.slice(0,3).join(', ') + (districts.length > 3 ? '...' : '') : 'Lima'\n    message = '🏠 <b>REMAJU — ' + today + '</b>\\n\\n'\n      + '🔍 Revisamos ' + auctions.length + ' remates en Lima.\\n'\n      + 'Hoy no hay propiedades nuevas que coincidan con tus filtros (' + distStr + ').\\n\\n'\n      + '<i>⚙️ Escribe /filtros para ajustar tus preferencias.</i>'\n    records = []\n  } else {\n    const lines = matching.map(a => {\n      const emoji = TIER_EMOJI[a.price_usd_tier] || '⚪'\n      const tier  = TIER_LABEL[a.price_usd_tier] || ''\n      const usd   = '$' + Math.round(a.price_usd).toLocaleString('en-US')\n      const pen   = a.currency_original === 'PEN' && a.price_original\n        ? 'S/ ' + Math.round(a.price_original).toLocaleString('es-PE')\n        : 'S/ ' + Math.round(a.price_usd * (a.exchange_rate || 3.7)).toLocaleString('es-PE')\n      const dist  = a.location_district || a.location_province || 'Lima'\n      const area  = a.area_m2 ? ' · ' + a.area_m2 + 'm²' : ''\n      const tipo  = a.property_type ? a.property_type.charAt(0).toUpperCase() + a.property_type.slice(1) : 'Propiedad'\n      const num   = a.external_id ? a.external_id.replace('REMAJU-','') : ''\n      return emoji + ' <b>' + usd + '</b> <i>(' + pen + ')</i> — ' + tipo + area + '\\n'\n           + '   📍 ' + dist + ' · ' + tier + '\\n'\n           + '   🔗 <a href=\"' + GOTO_URL + num + '\">Ver remate Nº ' + num + '</a>'\n    }).join('\\n\\n')\n    message = '🏠 <b>REMAJU — ' + today + '</b>\\n\\n'\n      + matching.length + ' propiedad' + (matching.length > 1 ? 'es' : '') + ' nueva' + (matching.length > 1 ? 's' : '') + ' para ti:\\n\\n'\n      + lines + '\\n\\n'\n      + '<i>⚙️ /filtros para ajustar preferencias</i>'\n    // records para guardar en alert_log (evita reenvios futuros)\n    records = matching.map(a => ({ user_id: user.id, auction_external_id: a.external_id }))\n  }\n\n  // Aviso de vencimiento próximo (1-2 días)\n  const endsAt = user.subscription_status === 'trial' ? user.trial_ends_at : user.subscription_ends_at\n  if (endsAt) {\n    const msLeft = new Date(endsAt) - now\n    const daysLeft = Math.ceil(msLeft / (1000 * 60 * 60 * 24))\n    if (daysLeft <= 2 && daysLeft > 0) {\n      const dStr = daysLeft === 1 ? 'mañana' : 'en 2 días'\n      message += '\\n\\n⚠️ <b>Tu acceso vence ' + dStr + '.</b>\\n'\n               + 'Escribe <b>/suscripcion</b> aquí para renovar.'\n    }\n  }\n  results.push({\n    telegram_id: String(user.telegram_id),\n    user_id: user.id,\n    message: message,\n    auction_ids: matching.map(a => a.external_id),\n    count: matching.length,\n    records: records\n  })\n}\nreturn results.map(r => ({ json: r }))"
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "n8",
+      "name": "Enviar Telegram",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        300
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst BOT_TOKEN = '8481244553:AAG1p0ExiDfLP1khxYzzRp-OLj5ik-MuH4s';\nconst d = $json;   // en runOnceForEachItem $json = item actual\n\nconst resp = await this.helpers.httpRequest({\n  method: 'POST',\n  url: 'https://api.telegram.org/bot' + BOT_TOKEN + '/sendMessage',\n  headers: { 'Content-Type': 'application/json' },\n  body: JSON.stringify({\n    chat_id: d.telegram_id,\n    text: d.message,\n    parse_mode: 'HTML',\n    disable_web_page_preview: true\n  }),\n  timeout: 15000\n});\n\nif (!resp.ok) {\n  throw new Error('Telegram API error: ' + resp.description + ' (chat_id=' + d.telegram_id + ')');\n}\n\nreturn { json: { telegram_id: d.telegram_id, user_id: d.user_id, auction_ids: d.auction_ids, sent: true } };"
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "n9",
+      "name": "Preparar AlertLog",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const userId = $json.user_id\nconst ids = $json.auction_ids || []\nconst records = ids.map(ext_id => ({ user_id: userId, auction_external_id: ext_id }))\nreturn [{ json: { records } }]\n"
+      }
+    },
+    {
+      "id": "n10",
+      "name": "Guardar AlertLog",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        300
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const SUP_URL = 'https://rdjpkfcztnourihqpffe.supabase.co';\nconst SUP_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJkanBrZmN6dG5vdXJpaHFwZmZlIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3ODY0MTU0NCwiZXhwIjoyMDk0MjE3NTQ0fQ.UhX4I_06RIoqPVx9Gyw0W1U_ABobWUDlkYl16waZGjs';\n\n// Leer records del nodo que los construye (no de Enviar Telegram que no los pasa)\nconst allRecords = $('Preparar Despacho').all().flatMap(item => item.json.records || []);\nif (!allRecords.length) return [{ json: { saved: 0 } }];\n\nawait this.helpers.httpRequest({\n  method: 'POST',\n  url: SUP_URL + '/rest/v1/remaju_alert_log?on_conflict=user_id,auction_external_id',\n  headers: {\n    apikey: SUP_KEY,\n    Authorization: 'Bearer ' + SUP_KEY,\n    'Content-Type': 'application/json',\n    Prefer: 'return=minimal,resolution=ignore-duplicates'\n  },\n  body: JSON.stringify(allRecords),\n  timeout: 15000\n});\n\nreturn [{ json: { saved: allRecords.length } }];"
+      }
+    },
+    {
+      "id": "n11",
+      "name": "Resumen Admin",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2200,
+        300
+      ],
+      "parameters": {
+        "jsCode": "\nconst BOT_TOKEN = '8481244553:AAG1p0ExiDfLP1khxYzzRp-OLj5ik-MuH4s';\nconst ADMIN_ID  = '7727513100';\n\nconst allUsers = $('Obtener Usuarios').all().map(i => i.json).filter(u => {\n  const now = new Date();\n  if (u.subscription_status === 'active') return !u.subscription_ends_at || new Date(u.subscription_ends_at) > now;\n  if (u.subscription_status === 'trial')  return !u.trial_ends_at || new Date(u.trial_ends_at) > now;\n  return false;\n});\n\nconst despachos = $('Preparar Despacho').all().map(i => i.json);\nconst despachoMap = {};\nfor (const d of despachos) despachoMap[d.user_id] = d;\n\nconst now = new Date();\nconst today = now.toLocaleDateString('es-PE', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Lima' });\nconst totalAlertas = despachos.reduce((s, d) => s + (d.count || 0), 0);\nconst TIER_EMOJI = { super_ganga: '\\u{1F534}', muy_bueno: '\\u{1F7E0}', bueno: '\\u{1F7E1}', aceptable: '\\u{1F7E2}' };\n\nawait this.helpers.httpRequest({\n  method: 'POST',\n  url: 'https://api.telegram.org/bot' + BOT_TOKEN + '/sendMessage',\n  headers: { 'Content-Type': 'application/json' },\n  body: JSON.stringify({\n    chat_id: ADMIN_ID,\n    text: '\\uD83D\\uDCCA <b>Despacho REMAJU \\u2014 ' + today + '</b>\\n' + allUsers.length + ' usuarios activos \\u00b7 ' + totalAlertas + ' alertas enviadas',\n    parse_mode: 'HTML'\n  }),\n  timeout: 10000\n});\n\nfor (const user of allUsers) {\n  const desp = despachoMap[user.id];\n  const count = desp ? desp.count : 0;\n  const f = Array.isArray(user.remaju_filters) ? (user.remaju_filters[0] || {}) : (user.remaju_filters || {});\n  const endDate = user.subscription_ends_at || user.trial_ends_at;\n  const daysLeft = endDate ? Math.ceil((new Date(endDate) - now) / 86400000) : null;\n  const status = user.subscription_status === 'active' ? '\\u2705 Activo' : '\\u{1F550} Trial';\n  const daysStr = daysLeft !== null ? daysLeft + 'd' : '?';\n  const maxPrice = f.max_price_usd || 90000;\n  const tiers = f.tiers || ['super_ganga','muy_bueno','bueno','aceptable'];\n  const types = f.property_types || ['casa','departamento','terreno','local','otro'];\n  const districts = f.districts && f.districts.length ? f.districts.join(', ') : 'Todos Lima';\n  const tiersStr = tiers.map(t => TIER_EMOJI[t] || t).join(' ');\n  const alertLine = count > 0 ? '\\u2705 <b>' + count + ' propiedad' + (count !== 1 ? 'es' : '') + ' enviada' + (count !== 1 ? 's' : '') + '</b>' : '\\u26AA Sin propiedades nuevas hoy';\n  const nombre = user.first_name || 'Usuario';\n  const text = '<b>' + nombre + '</b>  \\u00b7  ' + status + ' \\u00b7 ' + daysStr + '\\n'\n    + alertLine + '\\n\\n'\n    + '<b>Filtros:</b>\\n'\n    + '\\uD83D\\uDCB0 M\\u00e1x: $' + maxPrice.toLocaleString('en-US') + '\\n'\n    + '\\uD83D\\uDCCA ' + tiersStr + '\\n'\n    + '\\uD83C\\uDFE0 ' + (types.length >= 5 ? 'Todos' : types.join(', ')) + '\\n'\n    + '\\uD83D\\uDCCD ' + districts;\n\n  await this.helpers.httpRequest({\n    method: 'POST',\n    url: 'https://api.telegram.org/bot' + BOT_TOKEN + '/sendMessage',\n    headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify({ chat_id: ADMIN_ID, text, parse_mode: 'HTML' }),\n    timeout: 10000\n  });\n}\n\nreturn [{ json: { ok: true, users: allUsers.length, total_alertas: totalAlertas } }];"
+      }
+    },
+    {
+      "id": "dispatch_manual_wh",
+      "name": "Trigger Manual",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        0,
+        480
+      ],
+      "parameters": {
+        "path": "remaju-dispatch-manual",
+        "responseMode": "onReceived",
+        "responseData": "firstEntryJson",
+        "options": {},
+        "httpMethod": "GET"
+      },
+      "webhookId": "dispatch-manual-001"
+    },
+    {
+      "id": "dispatch_err_alert",
+      "name": "Alerta Error Admin",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        920,
+        480
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "\nconst BOT_TOKEN = '8481244553:AAG1p0ExiDfLP1khxYzzRp-OLj5ik-MuH4s';\nconst ADMIN_ID  = '7727513100';\n\nconst execId  = $execution.id || '?';\nconst wfName  = $workflow.name || 'Dispatch Diario';\nconst errMsg  = $input.first().json.error?.message || 'Error desconocido';\nconst errNode = $input.first().json.error?.node?.name || '?';\nconst limaTime = new Date().toLocaleTimeString('es-PE', { timeZone: 'America/Lima', hour: '2-digit', minute: '2-digit' });\n\nconst msg = '🚨 <b>REMAJU Dispatch FALLIDO</b> — ' + limaTime + '\\n\\n'\n  + '❌ Nodo: <code>' + errNode + '</code>\\n'\n  + '📋 Error: ' + errMsg + '\\n'\n  + '🔍 Exec ID: ' + execId + '\\n\\n'\n  + '<i>Ningún mensaje fue enviado a usuarios aún si el fallo fue antes de Enviar Telegram.</i>';\n\nawait this.helpers.httpRequest({\n  method: 'POST',\n  url: 'https://api.telegram.org/bot' + BOT_TOKEN + '/sendMessage',\n  headers: { 'Content-Type': 'application/json' },\n  body: JSON.stringify({ chat_id: ADMIN_ID, text: msg, parse_mode: 'HTML' }),\n  timeout: 10000\n});\n\nreturn [{ json: { alerted: true } }];"
+      }
+    },
+    {
+      "id": "check-ya-despachado-001",
+      "name": "Check Ya Despachado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        420,
+        380
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const SUP_URL = 'https://rdjpkfcztnourihqpffe.supabase.co';\nconst SUP_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJkanBrZmN6dG5vdXJpaHFwZmZlIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3ODY0MTU0NCwiZXhwIjoyMDk0MjE3NTQ0fQ.UhX4I_06RIoqPVx9Gyw0W1U_ABobWUDlkYl16waZGjs';\n\n// Fecha Lima en formato YYYY-MM-DD (lo que espera PostgreSQL DATE)\nconst todayLima = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' });\n\n// INSERT atómico — si ya existe la fecha (PRIMARY KEY), Supabase devuelve 409\n// Esto resuelve la condición de carrera: múltiples triggers simultáneos\n// llegan a la BD al mismo tiempo, solo el primero en hacer INSERT gana.\n// Los demás reciben 409 y se detienen silenciosamente.\ntry {\n  await this.helpers.httpRequest({\n    method: 'POST',\n    url: SUP_URL + '/rest/v1/remaju_dispatch_lock',\n    headers: {\n      apikey: SUP_KEY,\n      Authorization: 'Bearer ' + SUP_KEY,\n      'Content-Type': 'application/json',\n      Prefer: 'return=minimal'\n    },\n    body: JSON.stringify({ lock_date: todayLima }),\n    timeout: 8000\n  });\n  // INSERT exitoso → primer dispatch del día → continuar\n  return [{ json: { mode: 'dispatch', date: todayLima } }];\n} catch(e) {\n  const msg = String(e.message || '');\n  // 409 = clave duplicada → ya corrió hoy → detener sin error\n  if (msg.includes('409') || msg.includes('duplicate') || msg.includes('unique')) {\n    return [];\n  }\n  // Tabla no existe aún u otro error → fail open (dejar pasar el dispatch)\n  // Esto evita que un error de setup bloquee las alertas a usuarios reales\n  return [{ json: { mode: 'dispatch', date: todayLima, lockWarning: msg.substring(0, 120) } }];\n}"
+      }
+    }
+  ],
+  "connections": {
+    "Obtener Subastas": {
+      "main": [
+        [
+          {
+            "node": "Obtener Usuarios",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Obtener Usuarios": {
+      "main": [
+        [
+          {
+            "node": "Obtener AlertLog",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Obtener AlertLog": {
+      "main": [
+        [
+          {
+            "node": "Preparar Despacho",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Despacho": {
+      "main": [
+        [
+          {
+            "node": "Enviar Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Alerta Error Admin",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar Telegram": {
+      "main": [
+        [
+          {
+            "node": "Preparar AlertLog",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Alerta Error Admin",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar AlertLog": {
+      "main": [
+        [
+          {
+            "node": "Guardar AlertLog",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar AlertLog": {
+      "main": [
+        [
+          {
+            "node": "Resumen Admin",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Alerta Error Admin",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CRON 7AM Lima": {
+      "main": [
+        [
+          {
+            "node": "Check Ya Despachado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trigger Manual": {
+      "main": [
+        [
+          {
+            "node": "Check Ya Despachado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Ya Despachado": {
+      "main": [
+        [
+          {
+            "node": "Obtener Subastas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Lima",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "staticData": {
+    "node:CRON 8AM Lima": {
+      "recurrenceRules": []
+    },
+    "node:CRON 9AM Lima": {
+      "recurrenceRules": []
+    },
+    "node:CRON 7AM Lima": {
+      "recurrenceRules": []
+    }
+  },
+  "meta": null,
+  "pinData": null,
+  "versionId": "735054b7-259f-4840-b714-363238ff5b84",
+  "activeVersionId": "735054b7-259f-4840-b714-363238ff5b84",
+  "versionCounter": 148,
+  "triggerCount": 2,
+  "shared": [
+    {
+      "updatedAt": "2026-05-13T06:26:40.141Z",
+      "createdAt": "2026-05-13T06:26:40.141Z",
+      "role": "workflow:owner",
+      "workflowId": "HA9BS3KWHE3uIc5F",
+      "projectId": "rHohNmSvOVaasBRv",
+      "project": {
+        "updatedAt": "2025-12-15T18:03:51.136Z",
+        "createdAt": "2025-12-15T17:36:08.325Z",
+        "id": "rHohNmSvOVaasBRv",
+        "name": "Gabriel Barrero <gbarrero57@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "d0578bf7-eabc-4d42-8b83-067e0b33b70c",
+        "projectRelations": [
+          {
+            "updatedAt": "2025-12-15T17:36:08.326Z",
+            "createdAt": "2025-12-15T17:36:08.326Z",
+            "userId": "d0578bf7-eabc-4d42-8b83-067e0b33b70c",
+            "projectId": "rHohNmSvOVaasBRv",
+            "user": {
+              "updatedAt": "2026-05-23T12:50:55.000Z",
+              "createdAt": "2025-12-15T17:36:07.652Z",
+              "id": "d0578bf7-eabc-4d42-8b83-067e0b33b70c",
+              "email": "gbarrero57@gmail.com",
+              "firstName": "Gabriel",
+              "lastName": "Barrero",
+              "personalizationAnswers": {
+                "version": "v4",
+                "personalization_survey_submitted_at": "2025-12-15T18:04:04.664Z",
+                "personalization_survey_n8n_version": "2.0.2",
+                "companySize": "<20",
+                "companyType": "saas",
+                "role": "business-owner",
+                "reportedSource": "google"
+              },
+              "settings": {
+                "userActivated": true,
+                "easyAIWorkflowOnboarded": true,
+                "firstSuccessfulWorkflowId": "pcjSqYlnURtWWAMc",
+                "userActivatedAt": 1769234242953,
+                "npsSurvey": {
+                  "responded": true,
+                  "lastShownAt": 1771191351359
+                }
+              },
+              "disabled": false,
+              "mfaEnabled": false,
+              "lastActiveAt": "2026-05-23",
+              "isPending": false
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "tags": [],
+  "activeVersion": {
+    "updatedAt": "2026-05-23T13:05:41.639Z",
+    "createdAt": "2026-05-23T13:05:41.639Z",
+    "versionId": "735054b7-259f-4840-b714-363238ff5b84",
+    "workflowId": "HA9BS3KWHE3uIc5F",
+    "nodes": [
+      {
+        "id": "n1",
+        "name": "CRON 7AM Lima",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.2,
+        "position": [
+          0,
+          300
+        ],
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "cronExpression",
+                "expression": "0 7 * * *"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "n4",
+        "name": "Obtener Subastas",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          660,
+          300
+        ],
+        "parameters": {
+          "method": "GET",
+          "url": "https://remaju-scraper.bzgfek.easypanel.host/auctions",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "max_price_usd",
+                "value": "10000000"
+              },
+              {
+                "name": "department",
+                "value": "LIMA"
+              },
+              {
+                "name": "limit",
+                "value": "500"
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "n5",
+        "name": "Obtener Usuarios",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          880,
+          300
+        ],
+        "parameters": {
+          "method": "GET",
+          "url": "https://rdjpkfcztnourihqpffe.supabase.co/rest/v1/remaju_users",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJkanBrZmN6dG5vdXJpaHFwZmZlIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3ODY0MTU0NCwiZXhwIjoyMDk0MjE3NTQ0fQ.UhX4I_06RIoqPVx9Gyw0W1U_ABobWUDlkYl16waZGjs"
+              },
+              {
+                "name": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJkanBrZmN6dG5vdXJpaHFwZmZlIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3ODY0MTU0NCwiZXhwIjoyMDk0MjE3NTQ0fQ.UhX4I_06RIoqPVx9Gyw0W1U_ABobWUDlkYl16waZGjs"
+              }
+            ]
+          },
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "select",
+                "value": "*,remaju_filters(*)"
+              },
+              {
+                "name": "active",
+                "value": "eq.true"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "n6",
+        "name": "Obtener AlertLog",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1100,
+          300
+        ],
+        "parameters": {
+          "jsCode": "const SUP_URL = 'https://rdjpkfcztnourihqpffe.supabase.co'\nconst SUP_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJkanBrZmN6dG5vdXJpaHFwZmZlIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3ODY0MTU0NCwiZXhwIjoyMDk0MjE3NTQ0fQ.UhX4I_06RIoqPVx9Gyw0W1U_ABobWUDlkYl16waZGjs'\nconst since = new Date(Date.now() - 90*24*60*60*1000).toISOString()\n\nconst data = await this.helpers.httpRequest({\n  method: 'GET',\n  url: SUP_URL + '/rest/v1/remaju_alert_log?select=user_id,auction_external_id&sent_at=gte.' + since + '&limit=5000',\n  headers: { apikey: SUP_KEY, Authorization: 'Bearer ' + SUP_KEY }\n})\n\n// json debe ser objeto, no array — envolver en { data: [...] }\nreturn [{ json: { data: Array.isArray(data) ? data : [] } }]\n"
+        }
+      },
+      {
+        "id": "n7",
+        "name": "Preparar Despacho",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1320,
+          300
+        ],
+        "parameters": {
+          "jsCode": "const auctions = $('Obtener Subastas').first().json.data || []\nconst users = $('Obtener Usuarios').all().map(item => item.json)\nconst alertLog = $('Obtener AlertLog').first().json.data || []\nconst sentSet = new Set(alertLog.map(l => l.user_id + ':' + l.auction_external_id))\nconst TIER_EMOJI = { super_ganga: '🔴', muy_bueno: '🟠', bueno: '🟡', aceptable: '🟢' }\nconst TIER_LABEL = { super_ganga: 'Super Ganga', muy_bueno: 'Muy Bueno', bueno: 'Bueno', aceptable: 'Aceptable' }\nconst GOTO_URL = 'https://remaju-scraper.bzgfek.easypanel.host/goto/'\nconst results = []\nfor (const user of users) {\n  const now = new Date()\n  const isActive = user.subscription_status === 'active'\n    ? (!user.subscription_ends_at || new Date(user.subscription_ends_at) > now)\n    : user.subscription_status === 'trial'\n      ? (!user.trial_ends_at || new Date(user.trial_ends_at) > now)\n      : false\n  if (!isActive) continue\n  const rawF = user.remaju_filters || {}\n  const f = Array.isArray(rawF) ? (rawF[0] || {}) : rawF\n  const maxPrice  = f.max_price_usd  || 90000\n  const tiers     = f.tiers          || ['super_ganga','muy_bueno','bueno','aceptable']\n  const types     = f.property_types || ['casa','departamento','terreno','local','otro']\n  const districts = f.districts      || []\n  // Solo propiedades vistas por primera vez HOY — evita reenviar acumulados históricos\n  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' }) // 'YYYY-MM-DD'\n  const todayMidnightUTC = new Date(todayStr + 'T05:00:00Z') // medianoche Lima en UTC\n\n  let matching = auctions.filter(a => {\n    if (!a.price_usd || a.price_usd > maxPrice) return false\n    if (!tiers.includes(a.price_usd_tier)) return false\n    if (!types.includes(a.property_type)) return false\n    if (districts.length) {\n      const NORM = s => s.normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase()\n      const ALIAS = { 'SMP':'SAN MARTIN DE PORRES','VES':'VILLA EL SALVADOR','VMT':'VILLA MARIA DEL TRIUNFO','SJL':'SAN JUAN DE LURIGANCHO','CDB':'CERCADO DE LIMA','SJM':'SAN JUAN DE MIRAFLORES' }\n      const expandAlias = d => ALIAS[NORM(d)] || NORM(d)\n      const distRaw = NORM(a.location_district || a.location_raw || '')\n      if (!distRaw) return false\n      if (!districts.some(d => distRaw.includes(expandAlias(d)) || expandAlias(d).includes(distRaw))) return false\n    }\n    if (sentSet.has(user.id + ':' + a.external_id)) return false\n    // Solo propiedades genuinamente nuevas hoy\n    if (!a.first_seen_at || new Date(a.first_seen_at) < todayMidnightUTC) return false\n    return true\n  })\n  matching.sort((a, b) => (a.price_usd || 0) - (b.price_usd || 0))\n  matching = matching.slice(0, 8)\n  const today = new Date().toLocaleDateString('es-PE', {day:'2-digit', month:'2-digit', year:'numeric'})\n  let message, records\n  if (matching.length === 0) {\n    // Notificar al usuario que hoy no hay propiedades nuevas para sus filtros\n    const distStr = districts.length ? districts.slice(0,3).join(', ') + (districts.length > 3 ? '...' : '') : 'Lima'\n    message = '🏠 <b>REMAJU — ' + today + '</b>\\n\\n'\n      + '🔍 Revisamos ' + auctions.length + ' remates en Lima.\\n'\n      + 'Hoy no hay propiedades nuevas que coincidan con tus filtros (' + distStr + ').\\n\\n'\n      + '<i>⚙️ Escribe /filtros para ajustar tus preferencias.</i>'\n    records = []\n  } else {\n    const lines = matching.map(a => {\n      const emoji = TIER_EMOJI[a.price_usd_tier] || '⚪'\n      const tier  = TIER_LABEL[a.price_usd_tier] || ''\n      const usd   = '$' + Math.round(a.price_usd).toLocaleString('en-US')\n      const pen   = a.currency_original === 'PEN' && a.price_original\n        ? 'S/ ' + Math.round(a.price_original).toLocaleString('es-PE')\n        : 'S/ ' + Math.round(a.price_usd * (a.exchange_rate || 3.7)).toLocaleString('es-PE')\n      const dist  = a.location_district || a.location_province || 'Lima'\n      const area  = a.area_m2 ? ' · ' + a.area_m2 + 'm²' : ''\n      const tipo  = a.property_type ? a.property_type.charAt(0).toUpperCase() + a.property_type.slice(1) : 'Propiedad'\n      const num   = a.external_id ? a.external_id.replace('REMAJU-','') : ''\n      return emoji + ' <b>' + usd + '</b> <i>(' + pen + ')</i> — ' + tipo + area + '\\n'\n           + '   📍 ' + dist + ' · ' + tier + '\\n'\n           + '   🔗 <a href=\"' + GOTO_URL + num + '\">Ver remate Nº ' + num + '</a>'\n    }).join('\\n\\n')\n    message = '🏠 <b>REMAJU — ' + today + '</b>\\n\\n'\n      + matching.length + ' propiedad' + (matching.length > 1 ? 'es' : '') + ' nueva' + (matching.length > 1 ? 's' : '') + ' para ti:\\n\\n'\n      + lines + '\\n\\n'\n      + '<i>⚙️ /filtros para ajustar preferencias</i>'\n    // records para guardar en alert_log (evita reenvios futuros)\n    records = matching.map(a => ({ user_id: user.id, auction_external_id: a.external_id }))\n  }\n\n  // Aviso de vencimiento próximo (1-2 días)\n  const endsAt = user.subscription_status === 'trial' ? user.trial_ends_at : user.subscription_ends_at\n  if (endsAt) {\n    const msLeft = new Date(endsAt) - now\n    const daysLeft = Math.ceil(msLeft / (1000 * 60 * 60 * 24))\n    if (daysLeft <= 2 && daysLeft > 0) {\n      const dStr = daysLeft === 1 ? 'mañana' : 'en 2 días'\n      message += '\\n\\n⚠️ <b>Tu acceso vence ' + dStr + '.</b>\\n'\n               + 'Escribe <b>/suscripcion</b> aquí para renovar.'\n    }\n  }\n  results.push({\n    telegram_id: String(user.telegram_id),\n    user_id: user.id,\n    message: message,\n    auction_ids: matching.map(a => a.external_id),\n    count: matching.length,\n    records: records\n  })\n}\nreturn results.map(r => ({ json: r }))"
+        },
+        "onError": "continueErrorOutput"
+      },
+      {
+        "id": "n8",
+        "name": "Enviar Telegram",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1540,
+          300
+        ],
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "\nconst BOT_TOKEN = '8481244553:AAG1p0ExiDfLP1khxYzzRp-OLj5ik-MuH4s';\nconst d = $json;   // en runOnceForEachItem $json = item actual\n\nconst resp = await this.helpers.httpRequest({\n  method: 'POST',\n  url: 'https://api.telegram.org/bot' + BOT_TOKEN + '/sendMessage',\n  headers: { 'Content-Type': 'application/json' },\n  body: JSON.stringify({\n    chat_id: d.telegram_id,\n    text: d.message,\n    parse_mode: 'HTML',\n    disable_web_page_preview: true\n  }),\n  timeout: 15000\n});\n\nif (!resp.ok) {\n  throw new Error('Telegram API error: ' + resp.description + ' (chat_id=' + d.telegram_id + ')');\n}\n\nreturn { json: { telegram_id: d.telegram_id, user_id: d.user_id, auction_ids: d.auction_ids, sent: true } };"
+        },
+        "onError": "continueErrorOutput"
+      },
+      {
+        "id": "n9",
+        "name": "Preparar AlertLog",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1760,
+          300
+        ],
+        "parameters": {
+          "jsCode": "const userId = $json.user_id\nconst ids = $json.auction_ids || []\nconst records = ids.map(ext_id => ({ user_id: userId, auction_external_id: ext_id }))\nreturn [{ json: { records } }]\n"
+        }
+      },
+      {
+        "id": "n10",
+        "name": "Guardar AlertLog",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1980,
+          300
+        ],
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "jsCode": "const SUP_URL = 'https://rdjpkfcztnourihqpffe.supabase.co';\nconst SUP_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJkanBrZmN6dG5vdXJpaHFwZmZlIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3ODY0MTU0NCwiZXhwIjoyMDk0MjE3NTQ0fQ.UhX4I_06RIoqPVx9Gyw0W1U_ABobWUDlkYl16waZGjs';\n\n// Leer records del nodo que los construye (no de Enviar Telegram que no los pasa)\nconst allRecords = $('Preparar Despacho').all().flatMap(item => item.json.records || []);\nif (!allRecords.length) return [{ json: { saved: 0 } }];\n\nawait this.helpers.httpRequest({\n  method: 'POST',\n  url: SUP_URL + '/rest/v1/remaju_alert_log?on_conflict=user_id,auction_external_id',\n  headers: {\n    apikey: SUP_KEY,\n    Authorization: 'Bearer ' + SUP_KEY,\n    'Content-Type': 'application/json',\n    Prefer: 'return=minimal,resolution=ignore-duplicates'\n  },\n  body: JSON.stringify(allRecords),\n  timeout: 15000\n});\n\nreturn [{ json: { saved: allRecords.length } }];"
+        }
+      },
+      {
+        "id": "n11",
+        "name": "Resumen Admin",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2200,
+          300
+        ],
+        "parameters": {
+          "jsCode": "\nconst BOT_TOKEN = '8481244553:AAG1p0ExiDfLP1khxYzzRp-OLj5ik-MuH4s';\nconst ADMIN_ID  = '7727513100';\n\nconst allUsers = $('Obtener Usuarios').all().map(i => i.json).filter(u => {\n  const now = new Date();\n  if (u.subscription_status === 'active') return !u.subscription_ends_at || new Date(u.subscription_ends_at) > now;\n  if (u.subscription_status === 'trial')  return !u.trial_ends_at || new Date(u.trial_ends_at) > now;\n  return false;\n});\n\nconst despachos = $('Preparar Despacho').all().map(i => i.json);\nconst despachoMap = {};\nfor (const d of despachos) despachoMap[d.user_id] = d;\n\nconst now = new Date();\nconst today = now.toLocaleDateString('es-PE', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Lima' });\nconst totalAlertas = despachos.reduce((s, d) => s + (d.count || 0), 0);\nconst TIER_EMOJI = { super_ganga: '\\u{1F534}', muy_bueno: '\\u{1F7E0}', bueno: '\\u{1F7E1}', aceptable: '\\u{1F7E2}' };\n\nawait this.helpers.httpRequest({\n  method: 'POST',\n  url: 'https://api.telegram.org/bot' + BOT_TOKEN + '/sendMessage',\n  headers: { 'Content-Type': 'application/json' },\n  body: JSON.stringify({\n    chat_id: ADMIN_ID,\n    text: '\\uD83D\\uDCCA <b>Despacho REMAJU \\u2014 ' + today + '</b>\\n' + allUsers.length + ' usuarios activos \\u00b7 ' + totalAlertas + ' alertas enviadas',\n    parse_mode: 'HTML'\n  }),\n  timeout: 10000\n});\n\nfor (const user of allUsers) {\n  const desp = despachoMap[user.id];\n  const count = desp ? desp.count : 0;\n  const f = Array.isArray(user.remaju_filters) ? (user.remaju_filters[0] || {}) : (user.remaju_filters || {});\n  const endDate = user.subscription_ends_at || user.trial_ends_at;\n  const daysLeft = endDate ? Math.ceil((new Date(endDate) - now) / 86400000) : null;\n  const status = user.subscription_status === 'active' ? '\\u2705 Activo' : '\\u{1F550} Trial';\n  const daysStr = daysLeft !== null ? daysLeft + 'd' : '?';\n  const maxPrice = f.max_price_usd || 90000;\n  const tiers = f.tiers || ['super_ganga','muy_bueno','bueno','aceptable'];\n  const types = f.property_types || ['casa','departamento','terreno','local','otro'];\n  const districts = f.districts && f.districts.length ? f.districts.join(', ') : 'Todos Lima';\n  const tiersStr = tiers.map(t => TIER_EMOJI[t] || t).join(' ');\n  const alertLine = count > 0 ? '\\u2705 <b>' + count + ' propiedad' + (count !== 1 ? 'es' : '') + ' enviada' + (count !== 1 ? 's' : '') + '</b>' : '\\u26AA Sin propiedades nuevas hoy';\n  const nombre = user.first_name || 'Usuario';\n  const text = '<b>' + nombre + '</b>  \\u00b7  ' + status + ' \\u00b7 ' + daysStr + '\\n'\n    + alertLine + '\\n\\n'\n    + '<b>Filtros:</b>\\n'\n    + '\\uD83D\\uDCB0 M\\u00e1x: $' + maxPrice.toLocaleString('en-US') + '\\n'\n    + '\\uD83D\\uDCCA ' + tiersStr + '\\n'\n    + '\\uD83C\\uDFE0 ' + (types.length >= 5 ? 'Todos' : types.join(', ')) + '\\n'\n    + '\\uD83D\\uDCCD ' + districts;\n\n  await this.helpers.httpRequest({\n    method: 'POST',\n    url: 'https://api.telegram.org/bot' + BOT_TOKEN + '/sendMessage',\n    headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify({ chat_id: ADMIN_ID, text, parse_mode: 'HTML' }),\n    timeout: 10000\n  });\n}\n\nreturn [{ json: { ok: true, users: allUsers.length, total_alertas: totalAlertas } }];"
+        }
+      },
+      {
+        "id": "dispatch_manual_wh",
+        "name": "Trigger Manual",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 1,
+        "position": [
+          0,
+          480
+        ],
+        "parameters": {
+          "path": "remaju-dispatch-manual",
+          "responseMode": "onReceived",
+          "responseData": "firstEntryJson",
+          "options": {},
+          "httpMethod": "GET"
+        },
+        "webhookId": "dispatch-manual-001"
+      },
+      {
+        "id": "dispatch_err_alert",
+        "name": "Alerta Error Admin",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          920,
+          480
+        ],
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "jsCode": "\nconst BOT_TOKEN = '8481244553:AAG1p0ExiDfLP1khxYzzRp-OLj5ik-MuH4s';\nconst ADMIN_ID  = '7727513100';\n\nconst execId  = $execution.id || '?';\nconst wfName  = $workflow.name || 'Dispatch Diario';\nconst errMsg  = $input.first().json.error?.message || 'Error desconocido';\nconst errNode = $input.first().json.error?.node?.name || '?';\nconst limaTime = new Date().toLocaleTimeString('es-PE', { timeZone: 'America/Lima', hour: '2-digit', minute: '2-digit' });\n\nconst msg = '🚨 <b>REMAJU Dispatch FALLIDO</b> — ' + limaTime + '\\n\\n'\n  + '❌ Nodo: <code>' + errNode + '</code>\\n'\n  + '📋 Error: ' + errMsg + '\\n'\n  + '🔍 Exec ID: ' + execId + '\\n\\n'\n  + '<i>Ningún mensaje fue enviado a usuarios aún si el fallo fue antes de Enviar Telegram.</i>';\n\nawait this.helpers.httpRequest({\n  method: 'POST',\n  url: 'https://api.telegram.org/bot' + BOT_TOKEN + '/sendMessage',\n  headers: { 'Content-Type': 'application/json' },\n  body: JSON.stringify({ chat_id: ADMIN_ID, text: msg, parse_mode: 'HTML' }),\n  timeout: 10000\n});\n\nreturn [{ json: { alerted: true } }];"
+        }
+      },
+      {
+        "id": "check-ya-despachado-001",
+        "name": "Check Ya Despachado",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          420,
+          380
+        ],
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "jsCode": "const SUP_URL = 'https://rdjpkfcztnourihqpffe.supabase.co';\nconst SUP_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJkanBrZmN6dG5vdXJpaHFwZmZlIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3ODY0MTU0NCwiZXhwIjoyMDk0MjE3NTQ0fQ.UhX4I_06RIoqPVx9Gyw0W1U_ABobWUDlkYl16waZGjs';\n\n// Fecha Lima en formato YYYY-MM-DD (lo que espera PostgreSQL DATE)\nconst todayLima = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' });\n\n// INSERT atómico — si ya existe la fecha (PRIMARY KEY), Supabase devuelve 409\n// Esto resuelve la condición de carrera: múltiples triggers simultáneos\n// llegan a la BD al mismo tiempo, solo el primero en hacer INSERT gana.\n// Los demás reciben 409 y se detienen silenciosamente.\ntry {\n  await this.helpers.httpRequest({\n    method: 'POST',\n    url: SUP_URL + '/rest/v1/remaju_dispatch_lock',\n    headers: {\n      apikey: SUP_KEY,\n      Authorization: 'Bearer ' + SUP_KEY,\n      'Content-Type': 'application/json',\n      Prefer: 'return=minimal'\n    },\n    body: JSON.stringify({ lock_date: todayLima }),\n    timeout: 8000\n  });\n  // INSERT exitoso → primer dispatch del día → continuar\n  return [{ json: { mode: 'dispatch', date: todayLima } }];\n} catch(e) {\n  const msg = String(e.message || '');\n  // 409 = clave duplicada → ya corrió hoy → detener sin error\n  if (msg.includes('409') || msg.includes('duplicate') || msg.includes('unique')) {\n    return [];\n  }\n  // Tabla no existe aún u otro error → fail open (dejar pasar el dispatch)\n  // Esto evita que un error de setup bloquee las alertas a usuarios reales\n  return [{ json: { mode: 'dispatch', date: todayLima, lockWarning: msg.substring(0, 120) } }];\n}"
+        }
+      }
+    ],
+    "connections": {
+      "Obtener Subastas": {
+        "main": [
+          [
+            {
+              "node": "Obtener Usuarios",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Obtener Usuarios": {
+        "main": [
+          [
+            {
+              "node": "Obtener AlertLog",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Obtener AlertLog": {
+        "main": [
+          [
+            {
+              "node": "Preparar Despacho",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Preparar Despacho": {
+        "main": [
+          [
+            {
+              "node": "Enviar Telegram",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Alerta Error Admin",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Enviar Telegram": {
+        "main": [
+          [
+            {
+              "node": "Preparar AlertLog",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Alerta Error Admin",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Preparar AlertLog": {
+        "main": [
+          [
+            {
+              "node": "Guardar AlertLog",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Guardar AlertLog": {
+        "main": [
+          [
+            {
+              "node": "Resumen Admin",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Alerta Error Admin",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "CRON 7AM Lima": {
+        "main": [
+          [
+            {
+              "node": "Check Ya Despachado",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Trigger Manual": {
+        "main": [
+          [
+            {
+              "node": "Check Ya Despachado",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Check Ya Despachado": {
+        "main": [
+          [
+            {
+              "node": "Obtener Subastas",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "authors": "Gabriel Barrero",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "workflowPublishHistory": [
+      {
+        "createdAt": "2026-05-23T13:05:41.876Z",
+        "id": 903,
+        "workflowId": "HA9BS3KWHE3uIc5F",
+        "versionId": "735054b7-259f-4840-b714-363238ff5b84",
+        "event": "activated",
+        "userId": "d0578bf7-eabc-4d42-8b83-067e0b33b70c"
+      }
+    ]
+  }
+}

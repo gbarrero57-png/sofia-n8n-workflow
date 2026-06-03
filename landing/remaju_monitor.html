@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>REMAJU Monitor — Alertas inteligentes de remates judiciales</title>
+<link rel="icon" type="image/png" href="/favicon.png" />
+<link rel="apple-touch-icon" href="/favicon.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  :root {
+    --background: 0 0% 10%;
+    --foreground: 0 0% 96%;
+    --primary: 38 92% 50%;            /* amber — marca REMAJU */
+    --primary-foreground: 30 40% 6%;
+    --muted-foreground: 0 0% 60%;
+    --border: 0 0% 20%;
+    --hero-bg: 0 0% 8%;
+    --nav-button: 0 0% 18%;
+  }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: 'Sora', sans-serif;
+    position: relative;
+    background-color: hsl(var(--background));
+  }
+  ::selection { background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); }
+
+  /* ambient depth layer — fixed behind everything */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(140% 125% at 50% 32%, transparent 52%, hsl(0 0% 0% / 0.6) 100%),
+      radial-gradient(820px 620px at 12% -4%, hsl(38 92% 50% / 0.10), transparent 60%),
+      radial-gradient(680px 540px at 92% 14%, hsl(28 90% 48% / 0.07), transparent 62%),
+      radial-gradient(900px 700px at 78% 96%, hsl(38 92% 50% / 0.06), transparent 60%),
+      linear-gradient(180deg, hsl(0 0% 8%) 0%, hsl(0 0% 10.5%) 45%, hsl(0 0% 8.5%) 100%);
+  }
+  /* fine grain on top of the gradient */
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0.6;
+    background:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    mix-blend-mode: screen;
+  }
+  /* keep React content above the ambient layers */
+  #root { position: relative; z-index: 1; }
+  /* starfield canvas sits above the gradient, below content */
+  #stars { position: fixed; inset: 0; z-index: 0; pointer-events: none; display: block; }
+  /* dark sections become translucent so the ambient + stars show through */
+  .bg-background { background-color: transparent !important; }
+  .hero-grid { background-color: transparent !important; }
+
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .animate-fade-up { opacity: 0; animation: fade-up 0.6s ease-out forwards; }
+
+  .reveal { opacity: 0; transform: translateY(24px); transition: opacity 0.7s ease-out, transform 0.7s ease-out; }
+  .reveal.in { opacity: 1; transform: none; }
+
+  @keyframes pulse-dot {
+    0% { box-shadow: 0 0 0 0 hsl(var(--primary) / 0.55); }
+    70% { box-shadow: 0 0 0 9px hsl(var(--primary) / 0); }
+    100% { box-shadow: 0 0 0 0 hsl(var(--primary) / 0); }
+  }
+  .pulse-dot { animation: pulse-dot 2s infinite; }
+
+  .hero-grid {
+    position: relative;
+    background-color: transparent;
+    background-image:
+      radial-gradient(900px 520px at 50% -12%, hsl(var(--primary) / 0.18), transparent 60%),
+      radial-gradient(circle at 1px 1px, hsl(0 0% 100% / 0.05) 1px, transparent 0);
+    background-size: 100% 100%, 30px 30px;
+  }
+  .hero-grid::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(180deg, transparent 55%, hsl(0 0% 8% / 0.85) 100%);
+    -webkit-mask-image: linear-gradient(180deg, transparent 30%, #000 100%);
+            mask-image: linear-gradient(180deg, transparent 30%, #000 100%);
+  }
+</style>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        fontFamily: { sora: ['Sora', 'sans-serif'] },
+        colors: {
+          background: 'hsl(var(--background))',
+          foreground: 'hsl(var(--foreground))',
+          primary: { DEFAULT: 'hsl(var(--primary))', foreground: 'hsl(var(--primary-foreground))' },
+          'muted-foreground': 'hsl(var(--muted-foreground))',
+          border: 'hsl(var(--border))',
+          'hero-bg': 'hsl(var(--hero-bg))',
+          'nav-button': 'hsl(var(--nav-button))',
+        },
+      },
+    },
+  };
+</script>
+</head>
+<body class="bg-background text-foreground font-sora antialiased">
+<canvas id="stars"></canvas>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel">
+const { useEffect } = React;
+
+const BOT = "https://t.me/RematesOfertas_bot";
+const BAND_VIDEO = "https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260322_013248_a74099a8-be2b-4164-a823-eddd5e149fa1.mp4";
+const HERO_VIDEO = "https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260322_011532_86f9b93a-2ffc-42fd-8735-12a4c55ab536.mp4";
+
+const NAV_LINKS = [
+  { t: "Cómo funciona", h: "#como" },
+  { t: "Categorías", h: "#categorias" },
+  { t: "Precio", h: "#precio" },
+  { t: "FAQ", h: "#faq" },
+];
+
+const STEPS = [
+  { n: "01", k: "Una sola vez", t: "Configuras tus filtros", d: "Tu presupuesto, los distritos que te interesan y el tipo de propiedad. Lo defines una vez y queda guardado." },
+  { n: "02", k: "Cada mañana · 7:00 AM", t: "Recibes tu reporte en Telegram", d: "Solo las propiedades nuevas del día que coinciden con tus filtros. Directo a tu celular, sin abrir ninguna web." },
+  { n: "03", k: "En minutos", t: "Evalúas solo lo que vale la pena", d: "Ya vienen clasificadas por nivel de oportunidad. Tú decides cuáles revisar a fondo y dejas de perder el tiempo." },
+];
+
+const CATS = [
+  { n: "01", led: "🔴", t: "Super Ganga", d: "Muy por debajo del valor de mercado.", range: "−40% o más", color: "0 84% 60%" },
+  { n: "02", led: "🟠", t: "Muy Bueno", d: "Descuento fuerte sobre el comercial.", range: "−30 a 40%", color: "25 95% 53%" },
+  { n: "03", led: "🟡", t: "Bueno", d: "Oportunidad sólida para revisar.", range: "−20 a 30%", color: "48 96% 53%" },
+  { n: "04", led: "🟢", t: "Aceptable", d: "Por debajo del comercial, vale un ojo.", range: "−10 a 20%", color: "142 71% 45%" },
+];
+
+const FAQS = [
+  { q: "¿Cómo funciona exactamente?", a: "Te conectas al bot de Telegram, configuras tus filtros (presupuesto, distritos y tipo de propiedad) y listo. A partir del día siguiente recibes cada mañana a las 7 AM un mensaje con los remates nuevos que coinciden contigo, ya clasificados por oportunidad." },
+  { q: "¿Y si un día no hay nada para mí?", a: "No recibes ruido. Si ningún remate nuevo encaja con tus filtros ese día, simplemente no te llega un reporte con propiedades que no te sirven. Solo te avisamos cuando vale la pena mirar." },
+  { q: "¿De dónde sale la información? ¿Es confiable?", a: "Monitoreamos la fuente oficial de remates judiciales (remaju.pe) todos los días. Recibes exactamente lo que está publicado ahí, pero ya filtrado y ordenado por oportunidad — nosotros hacemos el trabajo manual que hoy haces tú." },
+  { q: "¿Necesito tarjeta para la prueba gratis?", a: "No. Los 3 días son completamente gratis y no pedimos ningún dato de pago para empezar. Recién si decides seguir, pagas el mes por Yape o Plin." },
+  { q: "¿Puedo cancelar cuando quiera?", a: "Sí, en cualquier momento y con un solo mensaje. No hay permanencia ni penalidad. Si cancelas, dejas de recibir los reportes al terminar el mes que ya pagaste." },
+];
+
+/* ---------- reveal hook ---------- */
+function useReveal() {
+  useEffect(() => {
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
+    }, { threshold: 0.14, rootMargin: '0px 0px -50px 0px' });
+    document.querySelectorAll('.reveal').forEach((el) => io.observe(el));
+    return () => io.disconnect();
+  }, []);
+}
+
+/* ---------- shared ---------- */
+function AmberButton({ children, className = "", href = BOT }) {
+  return (
+    <a href={href} target="_blank" rel="noopener"
+       className={"bg-primary text-primary-foreground font-semibold hover:bg-primary/90 active:scale-[0.97] transition rounded-lg uppercase text-xs tracking-widest h-11 inline-flex items-center justify-center gap-2 " + className}>
+      {children}
+    </a>
+  );
+}
+
+function Eyebrow({ children, dark }) {
+  return (
+    <div className={(dark ? "text-background/40" : "text-muted-foreground/60") + " text-xs uppercase tracking-[0.25em] mb-8"}>{children}</div>
+  );
+}
+
+function Logo({ light }) {
+  return (
+    <div className="flex items-center gap-3">
+      <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
+        <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none">
+          <path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4z" fill="hsl(var(--primary-foreground))"/>
+          <path d="M9 12l2 2 4-4.5" stroke="hsl(var(--primary))" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </div>
+      <span className={"text-xl font-semibold tracking-tight " + (light ? "text-background" : "text-foreground")}>
+        REMAJU <span className="text-muted-foreground font-normal">Monitor</span>
+      </span>
+    </div>
+  );
+}
+
+/* ---------- Navbar ---------- */
+function Navbar() {
+  const [menuOpen, setMenuOpen] = React.useState(false);
+  return (
+    <>
+      <nav className="fixed top-0 inset-x-0 z-50 flex items-center justify-between px-5 lg:px-16 py-4 backdrop-blur-md bg-hero-bg/80 border-b border-border/40">
+        <Logo />
+        <div className="hidden lg:flex items-center gap-9">
+          {NAV_LINKS.map((l) => (
+            <a key={l.t} href={l.h} className="text-sm text-muted-foreground uppercase tracking-widest hover:text-foreground transition-colors">{l.t}</a>
+          ))}
+        </div>
+        <div className="flex items-center gap-3">
+          <AmberButton className="hidden sm:inline-flex px-5 text-[11px]">Probar gratis</AmberButton>
+          <button onClick={() => setMenuOpen(!menuOpen)}
+            className="lg:hidden flex flex-col justify-center items-center w-9 h-9 gap-1.5 rounded-md border border-border/60 bg-white/5">
+            <span className={"block w-4.5 h-px bg-foreground/80 transition-all duration-200 " + (menuOpen ? "rotate-45 translate-y-[5px]" : "")} style={{width:'18px'}}></span>
+            <span className={"block h-px bg-foreground/80 transition-all duration-200 " + (menuOpen ? "opacity-0" : "")} style={{width:'18px'}}></span>
+            <span className={"block h-px bg-foreground/80 transition-all duration-200 " + (menuOpen ? "-rotate-45 -translate-y-[5px]" : "")} style={{width:'18px'}}></span>
+          </button>
+        </div>
+      </nav>
+      {/* Mobile drawer */}
+      {menuOpen && (
+        <div className="fixed inset-0 z-40 lg:hidden" onClick={() => setMenuOpen(false)}>
+          <div className="absolute top-[65px] inset-x-0 bg-hero-bg/98 backdrop-blur-lg border-b border-border/60 px-6 py-6 flex flex-col gap-1" onClick={e => e.stopPropagation()}>
+            {NAV_LINKS.map((l) => (
+              <a key={l.t} href={l.h} onClick={() => setMenuOpen(false)}
+                className="text-sm text-muted-foreground uppercase tracking-widest py-3.5 border-b border-border/30 last:border-0 hover:text-foreground transition-colors">
+                {l.t}
+              </a>
+            ))}
+            <div className="mt-4">
+              <AmberButton className="w-full text-sm h-12">Empezar prueba gratis →</AmberButton>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+/* ---------- Hero ---------- */
+function Hero() {
+  return (
+    <section className="relative min-h-[100svh] flex items-center overflow-hidden hero-grid pt-24 pb-28 lg:pt-28 lg:pb-20">
+      <div className="absolute inset-0 z-0 pointer-events-none">
+        <video
+          className="w-full h-full object-cover"
+          autoPlay loop muted playsInline src={HERO_VIDEO}
+          style={{
+            opacity: 0.28,
+            WebkitMaskImage: "radial-gradient(115% 115% at 72% 42%, #000 22%, transparent 72%)",
+            maskImage: "radial-gradient(115% 115% at 72% 42%, #000 22%, transparent 72%)"
+          }}
+        ></video>
+        <div className="absolute inset-0" style={{ background: "linear-gradient(90deg, hsl(0 0% 8% / 0.92) 0%, hsl(0 0% 8% / 0.55) 50%, hsl(0 0% 8% / 0.1) 100%)" }}></div>
+        <div className="absolute inset-0" style={{ background: "linear-gradient(0deg, hsl(0 0% 8% / 0.9) 0%, transparent 45%)" }}></div>
+      </div>
+
+      <div className="relative z-10 w-full px-5 lg:px-16">
+        <div className="max-w-3xl">
+          <div className="animate-fade-up inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3.5 py-1.5 mb-6" style={{ animationDelay: '0.1s' }}>
+            <span className="w-2 h-2 rounded-full bg-primary pulse-dot flex-none"></span>
+            <span className="text-primary text-[11px] font-medium tracking-wide">Alertas diarias · Remates judiciales · Lima, Perú</span>
+          </div>
+          <h1 className="animate-fade-up text-[2.15rem] sm:text-6xl lg:text-[4.6rem] font-light leading-[1.05] tracking-tight text-foreground" style={{ animationDelay: '0.2s' }}>
+            Las mejores gangas se las lleva{' '}
+            <span className="text-primary font-normal">quien se entera primero.</span>
+          </h1>
+          <p className="animate-fade-up text-muted-foreground text-[0.95rem] lg:text-lg max-w-xl mb-8 mt-5 leading-relaxed" style={{ animationDelay: '0.45s' }}>
+            REMAJU Monitor vigila por ti todos los remates de Lima. Cada mañana a las <strong className="text-foreground/90">7:00 AM</strong> recibes en Telegram solo las propiedades nuevas que encajan con tu presupuesto y tus distritos.
+          </p>
+          <div className="animate-fade-up flex flex-col sm:flex-row gap-4 items-stretch sm:items-center" style={{ animationDelay: '0.65s' }}>
+            <AmberButton className="w-full sm:w-auto px-8 h-12 text-[13px]">Empezar prueba gratis →</AmberButton>
+            <a href="#como" className="flex items-center justify-center sm:justify-start uppercase text-xs tracking-widest text-foreground/70 border-b border-primary/50 pb-1 hover:text-primary transition-colors">Cómo funciona</a>
+          </div>
+          <div className="animate-fade-up flex items-center gap-2 text-muted-foreground text-sm mt-6" style={{ animationDelay: '0.8s' }}>
+            <svg viewBox="0 0 24 24" className="w-4 h-4 text-primary flex-none" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            3 días gratis · Sin tarjeta, sin compromiso
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ---------- Problema ---------- */
+function Problem() {
+  const pains = [
+    "Entras a remaju.pe una, dos, tres veces al día y filtras todo a mano.",
+    "Abres propiedad por propiedad y calculas precios en una hoja de Excel.",
+    "Cuando por fin encuentras algo bueno, ya hay otros tres interesados.",
+    "O simplemente nunca lo viste, porque ese día no entraste a revisar.",
+  ];
+  return (
+    <section className="bg-background px-6 lg:px-16 pt-20 lg:pt-28 pb-20">
+      <Eyebrow>El problema</Eyebrow>
+      <div className="h-px w-full bg-muted-foreground/20 mb-16"></div>
+      <div className="flex flex-col lg:flex-row gap-12 lg:gap-24">
+        <div className="lg:w-[42%]">
+          <h2 className="reveal text-3xl sm:text-4xl leading-[1.15] tracking-tight text-foreground font-normal">
+            ¿Te identificas con esto?
+          </h2>
+          <p className="reveal text-muted-foreground mt-5 max-w-md leading-relaxed">Si inviertes en remates judiciales, esta rutina te suena de memoria.</p>
+        </div>
+        <div className="lg:w-[58%] flex flex-col">
+          {pains.map((p, i) => (
+            <div key={i} className="reveal flex items-start gap-5 py-6 border-t border-border/40">
+              <span className="text-primary/50 text-xs pt-1 tracking-widest">0{i+1}</span>
+              <p className="text-foreground/90 text-lg leading-snug font-light">{p}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ---------- Cómo funciona ---------- */
+function How() {
+  return (
+    <section id="como" className="bg-background px-6 lg:px-16 pt-12 lg:pt-16 pb-24">
+      <Eyebrow>Cómo funciona</Eyebrow>
+      <div className="h-px w-full bg-muted-foreground/20 mb-16"></div>
+      <h2 className="reveal text-3xl sm:text-4xl leading-[1.15] tracking-tight text-foreground font-normal max-w-2xl mb-16">
+        Tres pasos. Después, te olvidas.
+      </h2>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-px bg-border/40 rounded-sm overflow-hidden">
+        {STEPS.map((s) => (
+          <div key={s.n} className="reveal bg-background p-8 lg:p-10">
+            <div className="text-primary text-xs tracking-widest mb-6">{s.k}</div>
+            <div className="text-muted-foreground/30 text-5xl font-light mb-6">{s.n}</div>
+            <h3 className="text-xl font-medium text-foreground mb-3">{s.t}</h3>
+            <p className="text-muted-foreground text-sm leading-relaxed">{s.d}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/* ---------- Franja de video cinemática — fundida en el mismo fondo ---------- */
+function VideoBand() {
+  return (
+    <section className="relative h-[52vh] lg:h-[66vh] overflow-hidden bg-background">
+      <video
+        className="absolute inset-0 w-full h-full object-cover opacity-40"
+        autoPlay loop muted playsInline src={BAND_VIDEO}
+        style={{
+          WebkitMaskImage: "radial-gradient(96% 92% at 50% 50%, #000 32%, transparent 92%)",
+          maskImage: "radial-gradient(96% 92% at 50% 50%, #000 32%, transparent 92%)"
+        }}
+      ></video>
+      <div className="absolute inset-0 pointer-events-none" style={{ background: "linear-gradient(180deg, hsl(0 0% 8% / 0.35), transparent 45%, hsl(var(--primary) / 0.10))" }}></div>
+      <div className="relative z-10 h-full flex items-end px-5 lg:px-16 pb-12 lg:pb-20">
+        <p className="reveal max-w-3xl text-xl sm:text-3xl lg:text-[2.75rem] font-light leading-[1.2] tracking-tight text-foreground">
+          Mientras tú duermes, el monitor revisa cada nuevo remate de Lima.{' '}
+          <span className="text-primary">A las 7 AM ya está en tu celular, listo y clasificado.</span>
+        </p>
+      </div>
+    </section>
+  );
+}
+
+/* ---------- Categorías (mismo fondo oscuro — estrellas a través) ---------- */
+function Categories() {
+  return (
+    <section id="categorias" className="bg-background px-6 lg:px-16 pt-20 lg:pt-28 pb-24 lg:pb-32">
+      <Eyebrow>Lo que recibes</Eyebrow>
+      <div className="h-px w-full bg-muted-foreground/20 mb-16"></div>
+      <div className="flex flex-col lg:flex-row gap-16 lg:gap-24">
+        <div className="lg:w-[38%] flex flex-col justify-center">
+          <h2 className="reveal text-3xl sm:text-4xl leading-[1.15] tracking-tight text-foreground font-normal">
+            Cada propiedad, clasificada por nivel de oportunidad
+          </h2>
+          <p className="reveal text-muted-foreground mt-5 leading-relaxed max-w-sm">
+            Marcadas según qué tan por debajo de su valor comercial salen a remate. De un vistazo sabes cuáles merecen tu atención.
+          </p>
+          <div className="reveal mt-10">
+            <AmberButton className="px-8">Empezar prueba gratis →</AmberButton>
+          </div>
+        </div>
+        <div className="lg:w-[62%]">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-12 gap-x-10">
+            {CATS.map((c, i) => (
+              <div key={c.n} className="reveal pl-6" style={{ borderLeft: "3px solid hsl(" + c.color + ")" }}>
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-3xl leading-none">{c.led}</span>
+                  <span className="text-muted-foreground/40 text-xs tracking-widest">{c.n}</span>
+                </div>
+                <h3 className="text-xl font-medium leading-tight text-foreground mb-2">{c.t}</h3>
+                <p className="text-muted-foreground text-sm leading-relaxed mb-4">{c.d}</p>
+                <div className="inline-block text-sm font-semibold tracking-tight px-3 py-1 rounded-md"
+                     style={{ background: "hsl(" + c.color + " / 0.16)", color: "hsl(" + c.color + ")" }}>
+                  {c.range} <span className="font-normal opacity-70">bajo comercial</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ---------- Telegram mockup ---------- */
+function Telegram() {
+  const rows = [
+    { led: "🔴", t: "Depto 92 m² · Surco", s: "Av. Caminos del Inca · 3° remate", pr: "$74k", vale: "vale ~$135k" },
+    { led: "🟠", t: "Casa 160 m² · La Molina", s: "Rinconada · 2° remate", pr: "$98k", vale: "vale ~$155k" },
+    { led: "🟡", t: "Depto 70 m² · Miraflores", s: "Malecón cercano · 1° remate", pr: "$112k", vale: "vale ~$148k" },
+  ];
+  return (
+    <section className="bg-background px-6 lg:px-16 py-24">
+      <div className="flex flex-col lg:flex-row items-center gap-16 lg:gap-24 max-w-6xl mx-auto">
+        <div className="lg:w-1/2">
+          <Eyebrow>Tu reporte de las 7 AM</Eyebrow>
+          <h2 className="reveal text-3xl sm:text-4xl leading-[1.15] tracking-tight text-foreground font-normal mb-6">
+            Abres Telegram con tu café. Ya está todo listo.
+          </h2>
+          <p className="reveal text-muted-foreground leading-relaxed max-w-md mb-8">
+            Nada de hojas de cálculo ni de revisar la web tres veces al día. Solo las propiedades nuevas que te importan, ya filtradas y ordenadas por oportunidad.
+          </p>
+          <div className="reveal space-y-3">
+            {["Te enteras el mismo día, antes que los demás","Ya filtrado a tu medida y clasificado","No se te escapa ninguna oportunidad"].map((t) => (
+              <div key={t} className="flex items-center gap-3 text-foreground/90 text-sm">
+                <svg viewBox="0 0 24 24" className="w-4 h-4 text-primary flex-none" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                {t}
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="reveal lg:w-1/2 w-full max-w-sm">
+          <div className="rounded-3xl overflow-hidden border border-border shadow-2xl" style={{ background: "#0b1016" }}>
+            <div className="flex items-center gap-3 px-4 py-3" style={{ background: "linear-gradient(180deg,#17212b,#131b24)" }}>
+              <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold flex-none">R</div>
+              <div className="leading-tight">
+                <div className="text-white text-sm font-semibold">REMAJU Monitor</div>
+                <div className="text-[#2aabee] text-xs">bot</div>
+              </div>
+            </div>
+            <div className="p-4" style={{ background: "#0e1621" }}>
+              <div className="rounded-2xl p-4" style={{ background: "#182531", borderTopLeftRadius: 4 }}>
+                <div className="text-white font-semibold text-sm">☀️ Buenos días. 3 remates nuevos hoy</div>
+                <div className="text-[#8aa0b3] text-xs mt-1 mb-3">Filtros: hasta $120k · Surco, La Molina, Miraflores</div>
+                {rows.map((r, i) => (
+                  <div key={i} className="flex items-start gap-2 py-2.5 border-t border-white/5">
+                    <span className="text-base leading-tight flex-none">{r.led}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-white text-[13px] font-medium">{r.t}</div>
+                      <div className="text-[#8aa0b3] text-xs">{r.s}</div>
+                    </div>
+                    <div className="text-right flex-none">
+                      <div className="text-[#86efac] text-[13px] font-bold">{r.pr}</div>
+                      <div className="text-[#6b7382] text-[11px]">{r.vale}</div>
+                    </div>
+                  </div>
+                ))}
+                <div className="text-[#2aabee] text-xs font-medium mt-3">Ver fichas completas →</div>
+                <div className="text-right text-[11px] text-[#5a6c7d] mt-1.5">7:00 AM ✓✓</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ---------- Precio ---------- */
+function Pricing() {
+  const perks = ["Reporte diario a las 7 AM, todos los días","Filtros personalizados ilimitados","Cancela cuando quieras, sin penalidad"];
+  return (
+    <section id="precio" className="bg-background px-6 lg:px-16 pt-12 pb-24">
+      <Eyebrow>Precio</Eyebrow>
+      <div className="h-px w-full bg-muted-foreground/20 mb-16"></div>
+      <div className="flex flex-col lg:flex-row gap-12 lg:gap-24 items-start">
+        <div className="lg:w-[42%]">
+          <h2 className="reveal text-3xl sm:text-4xl leading-[1.15] tracking-tight text-foreground font-normal mb-5">
+            Pruébalo gratis. Decide después.
+          </h2>
+          <p className="reveal text-muted-foreground leading-relaxed max-w-md">
+            Empiezas sin pagar nada. Si en 3 días no te ahorra tiempo, no pagas y listo. Sin tarjeta, sin permanencia.
+          </p>
+        </div>
+        <div className="reveal lg:w-[58%] w-full">
+          <div className="rounded-2xl border border-border bg-[hsl(0_0%_13%)] overflow-hidden">
+            <div className="p-8 border-b border-border" style={{ background: "linear-gradient(135deg, hsl(142 71% 45% / 0.14), transparent)" }}>
+              <span className="inline-block text-[11px] font-semibold uppercase tracking-widest text-[#86efac] bg-[hsl(142_71%_45%/0.18)] px-3 py-1 rounded-full mb-4">Empieza aquí</span>
+              <div className="flex items-end gap-2">
+                <span className="text-5xl font-bold tracking-tight text-foreground">3 días</span>
+                <span className="text-xl text-muted-foreground mb-1">gratis</span>
+              </div>
+              <p className="text-muted-foreground text-sm mt-2">Sin tarjeta. Sin compromiso. Cancelas con un mensaje.</p>
+            </div>
+            <div className="p-8">
+              <div className="flex items-baseline gap-2 mb-6">
+                <span className="text-3xl font-bold tracking-tight text-foreground">S/ 75</span>
+                <span className="text-muted-foreground">/ mes</span>
+                <span className="text-muted-foreground/60 text-sm">· ≈ $20 USD luego de la prueba</span>
+              </div>
+              <div className="space-y-3 mb-8">
+                {perks.map((p) => (
+                  <div key={p} className="flex items-center gap-3 text-foreground/90 text-sm">
+                    <svg viewBox="0 0 24 24" className="w-4 h-4 text-primary flex-none" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    {p}
+                  </div>
+                ))}
+                <div className="flex items-center gap-3 text-muted-foreground text-sm">💳 Pago por Yape o Plin</div>
+              </div>
+              <AmberButton className="w-full">Empezar prueba gratis →</AmberButton>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ---------- FAQ ---------- */
+function Faq() {
+  const [open, setOpen] = React.useState(0);
+  return (
+    <section id="faq" className="bg-background px-6 lg:px-16 pt-12 pb-24">
+      <Eyebrow>Dudas frecuentes</Eyebrow>
+      <div className="h-px w-full bg-muted-foreground/20 mb-16"></div>
+      <div className="flex flex-col lg:flex-row gap-12 lg:gap-24">
+        <h2 className="reveal lg:w-[38%] text-3xl sm:text-4xl leading-[1.15] tracking-tight text-foreground font-normal">
+          Lo que seguro te preguntas
+        </h2>
+        <div className="lg:w-[62%]">
+          {FAQS.map((f, i) => (
+            <div key={i} className="reveal border-t border-border/60 last:border-b">
+              <button onClick={() => setOpen(open === i ? -1 : i)} className="w-full flex items-center justify-between gap-4 text-left py-5">
+                <span className="text-foreground font-medium text-base leading-snug">{f.q}</span>
+                <span className={"flex-none w-6 h-6 relative text-primary transition-transform duration-300 " + (open === i ? "rotate-45" : "")}>
+                  <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3.5 h-0.5 bg-current rounded"></span>
+                  <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-0.5 h-3.5 bg-current rounded"></span>
+                </span>
+              </button>
+              <div className="overflow-hidden transition-all duration-300" style={{ maxHeight: open === i ? 240 : 0 }}>
+                <p className="text-muted-foreground leading-relaxed pb-6 max-w-2xl">{f.a}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ---------- CTA final ---------- */
+function FinalCTA() {
+  return (
+    <section className="relative px-6 lg:px-16 py-28 overflow-hidden hero-grid text-center">
+      <div className="relative z-10 max-w-3xl mx-auto">
+        <Eyebrow>Empieza hoy</Eyebrow>
+        <h2 className="reveal text-3xl sm:text-5xl font-light leading-[1.05] tracking-tight text-foreground mb-6">
+          Mañana a las 7 AM podrías tener<br/><span className="text-primary">tu primer reporte.</span>
+        </h2>
+        <p className="reveal text-muted-foreground max-w-md mx-auto mb-10 leading-relaxed">
+          Deja de revisar remaju.pe a mano. Configura tus filtros una vez y que las oportunidades te lleguen a ti.
+        </p>
+        <div className="reveal flex flex-col items-center gap-5">
+          <AmberButton className="px-10">Empezar prueba gratis →</AmberButton>
+          <div className="flex items-center gap-2 text-muted-foreground text-sm">
+            <svg viewBox="0 0 24 24" className="w-4 h-4 text-primary" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            3 días gratis · Sin tarjeta · Cancela cuando quieras
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ---------- Footer ---------- */
+function Footer() {
+  return (
+    <footer className="bg-background border-t border-border/40 px-6 lg:px-16 py-14 pb-28 lg:pb-14">
+      <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-10">
+        <div>
+          <div className="mb-5"><Logo /></div>
+          <p className="text-muted-foreground text-sm max-w-xs leading-relaxed">Alertas diarias de remates judiciales inmobiliarios en Lima, Perú.</p>
+        </div>
+        <div className="flex flex-wrap gap-x-9 gap-y-3">
+          {NAV_LINKS.map((l) => (
+            <a key={l.t} href={l.h} className="text-xs text-muted-foreground uppercase tracking-widest hover:text-foreground transition-colors">{l.t}</a>
+          ))}
+        </div>
+      </div>
+      <div className="h-px w-full bg-border/40 my-10"></div>
+      <div className="flex flex-col sm:flex-row justify-between gap-3 text-xs text-muted-foreground/60 tracking-wide">
+        <span>© 2026 REMAJU Monitor</span>
+        <span>No afiliado a remaju.pe · Servicio independiente de monitoreo</span>
+      </div>
+    </footer>
+  );
+}
+
+/* ---------- Mobile sticky CTA bar ---------- */
+function MobileCTABar() {
+  const [visible, setVisible] = React.useState(false);
+  useEffect(() => {
+    const onScroll = () => setVisible(window.scrollY > 320);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+  return (
+    <div className={"lg:hidden fixed bottom-0 inset-x-0 z-50 transition-transform duration-300 " + (visible ? "translate-y-0" : "translate-y-full")}
+         style={{ background: "linear-gradient(0deg, hsl(0 0% 8% / 0.98) 0%, hsl(0 0% 8% / 0.92) 100%)", borderTop: "1px solid hsl(var(--border) / 0.6)", paddingBottom: "env(safe-area-inset-bottom)" }}>
+      <div className="px-4 py-3 flex items-center gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="text-foreground text-[13px] font-semibold leading-tight">REMAJU Monitor</div>
+          <div className="text-muted-foreground text-[11px]">3 días gratis · S/ 75/mes</div>
+        </div>
+        <AmberButton className="flex-none px-5 h-11 text-[12px] whitespace-nowrap">Empezar gratis →</AmberButton>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- App ---------- */
+function App() {
+  useReveal();
+  return (
+    <React.Fragment>
+      <Navbar />
+      <Hero />
+      <Problem />
+      <How />
+      <VideoBand />
+      <Categories />
+      <Telegram />
+      <Pricing />
+      <Faq />
+      <FinalCTA />
+      <Footer />
+      <MobileCTABar />
+    </React.Fragment>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+
+<!-- ===== Starfield — universe parallax tied to scroll ===== -->
+<script>
+(function () {
+  const canvas = document.getElementById('stars');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  let w = 0, h = 0, dpr = 1, fieldH = 0, stars = [];
+
+  function initStars() {
+    fieldH = h * 3;
+    const count = Math.max(110, Math.round((w * fieldH) / 7000));
+    stars = [];
+    for (let i = 0; i < count; i++) {
+      const depth = Math.random();            // 0 = far, 1 = near
+      stars.push({
+        x: Math.random() * w,
+        y: Math.random() * fieldH,
+        r: 0.5 + depth * 1.7,
+        p: 0.06 + depth * 0.5,                // parallax factor (near moves more)
+        base: 0.28 + Math.random() * 0.6,     // base alpha — brighter
+        tw: Math.random() * Math.PI * 2,      // twinkle phase
+        tws: 0.5 + Math.random() * 1.1,       // twinkle speed
+        warm: Math.random() < 0.16            // a few amber stars
+      });
+    }
+  }
+
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    w = window.innerWidth;
+    h = window.innerHeight;
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    canvas.style.width = w + 'px';
+    canvas.style.height = h + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    initStars();
+  }
+
+  let scrollY = window.scrollY, target = window.scrollY, t = 0;
+  window.addEventListener('scroll', function () { target = window.scrollY; }, { passive: true });
+  window.addEventListener('resize', resize);
+
+  function frame() {
+    scrollY += (target - scrollY) * 0.08;     // smooth easing — gentle drift after scroll stops
+    t += 0.016;
+    ctx.clearRect(0, 0, w, h);
+    for (let i = 0; i < stars.length; i++) {
+      const s = stars[i];
+      let y = (s.y - scrollY * s.p) % fieldH;
+      if (y < 0) y += fieldH;
+      if (y > h + 4) continue;                 // only paint stars within the viewport band
+      const a = s.base * (0.55 + 0.45 * Math.sin(t * s.tws + s.tw));
+      const col = s.warm ? '245,180,95' : '255,255,255';
+      if (s.r > 1.25) { ctx.shadowBlur = s.r * 3.2; ctx.shadowColor = 'rgba(' + col + ',' + (a * 0.85) + ')'; }
+      else { ctx.shadowBlur = 0; }
+      ctx.beginPath();
+      ctx.arc(s.x, y, s.r, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(' + col + ',' + a + ')';
+      ctx.fill();
+    }
+    requestAnimationFrame(frame);
+  }
+
+  resize();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

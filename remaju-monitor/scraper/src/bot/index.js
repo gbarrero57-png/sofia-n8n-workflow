@@ -268,12 +268,36 @@ function createBot () {
 
   async function sendAyuda (ctx, tipo) {
     const texto = AYUDA_TEXTO[tipo] || AYUDA_TEXTO.inicio
-    const otroTipo  = tipo === 'inicio' ? 'filtros' : 'inicio'
-    const otroLabel = tipo === 'inicio' ? '⚙️ Cómo configurar filtros' : '❓ Cómo funciona'
     const kb = Markup.inlineKeyboard([
-      [Markup.button.callback(otroLabel, `ayuda:${otroTipo}`)],
-      [Markup.button.callback('⚙️ Ir a mis filtros', 'ayuda:ir_filtros')]
+      [Markup.button.callback('⚙️ Ir a mis filtros ahora', 'ayuda:ir_filtros')]
     ])
+    return { texto, kb }
+  }
+
+  async function showFiltrosMenu (ctx) {
+    const sb = getSupabase()
+    const { data: user } = await sb.from('remaju_users').select('id').eq('telegram_id', ctx.from.id).single()
+    if (!user) return ctx.reply('Usa /start primero.')
+    const { data: f } = await sb.from('remaju_filters').select('*').eq('user_id', user.id).single()
+    const maxPrice   = f?.max_price_usd  || 90000
+    const types      = f?.property_types || ['casa','departamento','terreno','local','otro']
+    const tiers      = f?.tiers          || ['super_ganga','muy_bueno','bueno','aceptable']
+    const districts  = f?.districts      || []
+    const tierLabels = { super_ganga: '🔴 Super Ganga', muy_bueno: '🟠 Muy Bueno', bueno: '🟡 Bueno', aceptable: '🟢 Aceptable' }
+    const kb = Markup.inlineKeyboard([
+      [Markup.button.callback('💰 Precio máximo', 'filt:precio')],
+      [Markup.button.callback('🏠 Tipo de propiedad', 'filt:tipo')],
+      [Markup.button.callback('📊 Tiers / categorías', 'filt:tiers')],
+      [Markup.button.callback('📍 Distritos', 'filt:distritos')],
+      [Markup.button.callback('✅ Listo', 'filt:done')]
+    ])
+    const texto =
+      `⚙️ <b>Mis Filtros</b>\n\n` +
+      `💰 Precio máx: <b>$${maxPrice.toLocaleString()} USD</b>\n` +
+      `🏠 Tipos: <b>${types.length === 5 ? 'Todos' : types.join(', ')}</b>\n` +
+      `📊 Tiers: <b>${tiers.map(t => tierLabels[t] || t).join(', ')}</b>\n` +
+      `📍 Distritos: <b>${districts.length ? districts.slice(0,4).join(', ') + (districts.length > 4 ? '...' : '') : 'Todo el Perú'}</b>\n\n` +
+      `¿Qué quieres cambiar?`
     return { texto, kb }
   }
 
@@ -294,40 +318,21 @@ function createBot () {
 
   bot.action('ayuda:filtros', async (ctx) => {
     await ctx.answerCbQuery()
-    const { texto, kb } = await sendAyuda(ctx, 'filtros')
     try {
+      const { texto, kb } = await showFiltrosMenu(ctx)
       await ctx.editMessageText(texto, { parse_mode: 'HTML', ...kb })
     } catch (e) {
-      if (!e.message?.includes('message is not modified')) await ctx.replyWithHTML(texto, kb)
+      if (!e.message?.includes('message is not modified')) {
+        const { texto, kb } = await showFiltrosMenu(ctx)
+        await ctx.replyWithHTML(texto, kb)
+      }
     }
   })
 
   bot.action('ayuda:ir_filtros', async (ctx) => {
     await ctx.answerCbQuery()
-    const sb = getSupabase()
-    const { data: user } = await sb.from('remaju_users').select('id').eq('telegram_id', ctx.from.id).single()
-    if (!user) return ctx.reply('Usa /start primero.')
-    const { data: f } = await sb.from('remaju_filters').select('*').eq('user_id', user.id).single()
-    const maxPrice  = f?.max_price_usd  || 90000
-    const types     = f?.property_types || ['casa','departamento','terreno','local','otro']
-    const tiers     = f?.tiers          || ['super_ganga','muy_bueno','bueno','aceptable']
-    const districts = f?.districts      || []
-    const tierLabels = { super_ganga: '🔴 Super Ganga', muy_bueno: '🟠 Muy Bueno', bueno: '🟡 Bueno', aceptable: '🟢 Aceptable' }
-    await ctx.replyWithHTML(
-      `⚙️ <b>Mis Filtros</b>\n\n` +
-      `💰 Precio máx: <b>$${maxPrice.toLocaleString()} USD</b>\n` +
-      `🏠 Tipos: <b>${types.length === 5 ? 'Todos' : types.join(', ')}</b>\n` +
-      `📊 Tiers: <b>${tiers.map(t => tierLabels[t] || t).join(', ')}</b>\n` +
-      `📍 Distritos: <b>${districts.length ? districts.slice(0,4).join(', ') + (districts.length > 4 ? '...' : '') : 'Todo el Perú'}</b>\n\n` +
-      `¿Qué quieres cambiar?`,
-      Markup.inlineKeyboard([
-        [Markup.button.callback('💰 Precio máximo', 'filt:precio')],
-        [Markup.button.callback('🏠 Tipo de propiedad', 'filt:tipo')],
-        [Markup.button.callback('📊 Tiers / categorías', 'filt:tiers')],
-        [Markup.button.callback('📍 Distritos', 'filt:distritos')],
-        [Markup.button.callback('✅ Listo', 'filt:done')]
-      ])
-    )
+    const { texto, kb } = await showFiltrosMenu(ctx)
+    await ctx.replyWithHTML(texto, kb)
   })
 
   // ── /filtros — menú principal de configuración ──────────────────────────

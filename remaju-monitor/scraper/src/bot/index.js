@@ -121,20 +121,14 @@ function createBot () {
       if (isNew) {
         await ctx.replyWithHTML(
           `👋 <b>¡Hola ${user.first_name}!</b>\n\n` +
-          `¿Cuántas horas pierdes buscando remates en REMAJU? ¿Revisando la misma web una y otra vez, sin saber si ya salió algo nuevo?\n\n` +
-          `<b>REMAJU Monitor</b> lo hace por ti.\n` +
-          `Cada mañana te llega una lista personalizada con los mejores remates del día — solo los que encajan con tu presupuesto y distritos.\n\n` +
-          `⏳ <b>Solo 3 días de prueba gratuita</b> — aprovéchalos al máximo.\n\n` +
-          `Propiedades clasificadas por precio:\n` +
-          `🔴 Super Ganga  ·  🟠 Muy Bueno  ·  🟡 Bueno  ·  🟢 Aceptable\n\n` +
-          `<b>Comandos:</b>\n` +
-          `❓ /ayuda — cómo funciona y cómo configurar\n` +
-          `⚙️ /filtros — personalizar tus alertas\n` +
-          `📊 /estado — ver tu suscripción\n` +
-          `💳 /suscripcion — contratar plan mensual`,
+          `Cada mañana a las <b>7AM</b> te envío los mejores remates de Lima, ` +
+          `filtrados por tu presupuesto y zona. Sin que tengas que buscar nada.\n\n` +
+          `🔴 Super Ganga · 🟠 Muy Bueno · 🟡 Bueno · 🟢 Aceptable\n\n` +
+          `⏳ <b>3 días de prueba gratis</b> — sin tarjeta.\n\n` +
+          `Para empezar, configura qué propiedades te interesan:`,
           Markup.inlineKeyboard([
-            [Markup.button.callback('❓ ¿Cómo funciona?', 'ayuda:inicio')],
-            [Markup.button.callback('⚙️ Configurar mis filtros ahora', 'ayuda:filtros')]
+            [Markup.button.callback('⚙️ Configurar mis filtros', 'ayuda:filtros')],
+            [Markup.button.callback('❓ ¿Cómo funciona?', 'ayuda:inicio')]
           ])
         )
 
@@ -147,12 +141,21 @@ function createBot () {
         ).catch(() => {})
 
       } else {
+        const subLine = formatSubscriptionLine(user)
+        const now = new Date()
+        const endsAt = user.subscription_status === 'active' ? user.subscription_ends_at : user.trial_ends_at
+        const daysLeft = endsAt ? Math.ceil((new Date(endsAt) - now) / 86400000) : null
+        const showRenew = daysLeft !== null && daysLeft <= 5
+
+        const buttons = [
+          [Markup.button.callback('⚙️ Mis filtros', 'filt:menu'), Markup.button.callback('📊 Mi estado', 'ver:estado')]
+        ]
+        if (showRenew) buttons.push([Markup.button.callback('💳 Renovar acceso', 'sub:pago')])
+
         await ctx.replyWithHTML(
           `👋 <b>¡Hola de nuevo, ${user.first_name}!</b>\n\n` +
-          `${formatSubscriptionLine(user)}\n\n` +
-          `❓ /ayuda — cómo funciona y cómo configurar\n` +
-          `📊 /estado — ver suscripción y filtros\n` +
-          `💳 /suscripcion — contratar plan`
+          `${subLine}`,
+          Markup.inlineKeyboard(buttons)
         )
       }
     } catch (err) {
@@ -183,12 +186,21 @@ function createBot () {
           `📍 Distritos: ${f.districts?.length ? f.districts.slice(0,3).join(', ') + (f.districts.length > 3 ? ` (+${f.districts.length - 3} más)` : '') : 'Todo el Perú'}`
         : 'Sin filtros configurados'
 
+      const now2 = new Date()
+      const endsAt2 = user.subscription_status === 'active' ? user.subscription_ends_at : user.trial_ends_at
+      const daysLeft2 = endsAt2 ? Math.ceil((new Date(endsAt2) - now2) / 86400000) : null
+      const showRenew2 = daysLeft2 !== null && daysLeft2 <= 7
+
+      const estadoButtons = [[Markup.button.callback('⚙️ Cambiar filtros', 'filt:menu')]]
+      if (showRenew2 || user.subscription_status === 'expired') {
+        estadoButtons.push([Markup.button.callback('💳 Renovar acceso', 'sub:pago')])
+      }
+
       await ctx.replyWithHTML(
         `📊 <b>Tu cuenta REMAJU Monitor</b>\n\n` +
         `${formatSubscriptionLine(user)}\n\n` +
-        `<b>Filtros activos:</b>\n${filterInfo}\n\n` +
-        `⚙️ /filtros — modificar preferencias\n` +
-        `💳 /suscripcion — ver plan`
+        `<b>Filtros activos:</b>\n${filterInfo}`,
+        Markup.inlineKeyboard(estadoButtons)
       )
     } catch (err) {
       logger.error('Error en /estado', { error: err.message })
@@ -200,18 +212,17 @@ function createBot () {
   bot.command('suscripcion', async (ctx) => {
     await ctx.replyWithHTML(
       `💳 <b>Plan REMAJU Monitor</b>\n\n` +
-      `<b>S/ ${PRICE_SOLES}/mes</b> — Acceso completo\n` +
-      `• Alertas diarias personalizadas\n` +
-      `• Todos los distritos de Lima\n` +
-      `• Filtros por precio, tipo y tier\n` +
-      `• Sin publicidad ni límites\n\n` +
+      `<b>S/ ${PRICE_SOLES}/mes</b>\n\n` +
+      `✅ Alertas diarias a las 7AM\n` +
+      `✅ Filtros por precio, tipo y distrito\n` +
+      `✅ Sin publicidad ni límites\n\n` +
       `━━━━━━━━━━━━━━━━━━\n` +
-      `<b>Cómo pagar:</b>\n\n` +
-      `📱 <b>Yape:</b> ${YAPE_NUM}\n` +
-      `📱 <b>Plin:</b> ${PLIN_NUM}\n` +
+      `📱 <b>Yape / Plin:</b> ${YAPE_NUM}\n` +
       `   A nombre de: <b>${ADMIN_NAME}</b>\n\n` +
-      `━━━━━━━━━━━━━━━━━━\n` +
-      `<i>Después de pagar, envía aquí tu captura de pantalla del comprobante. Te activamos en menos de 24h.</i>`
+      `Envía tu captura del comprobante aquí mismo — te activamos en menos de 24h.`,
+      Markup.inlineKeyboard([
+        [Markup.button.callback('📸 Ya pagué — enviar comprobante', 'sub:comprobante')]
+      ])
     )
   })
 
@@ -848,10 +859,81 @@ function createBot () {
 
   // LISTO
   bot.action('filt:done', async (ctx) => {
-    await ctx.answerCbQuery('✅ Filtros guardados')
+    await ctx.answerCbQuery('✅ Guardado')
     await ctx.editMessageText(
-      '✅ <b>Filtros guardados.</b>\n\nLos recibirás aplicados desde mañana en tu alerta diaria.\n\n' +
-      '📊 /estado — ver resumen\n⚙️ /filtros — modificar de nuevo',
+      '✅ <b>Filtros guardados.</b>\n\nTus alertas de mañana ya usarán esta configuración.',
+      { parse_mode: 'HTML', ...Markup.inlineKeyboard([
+        [Markup.button.callback('📊 Ver mi estado', 'ver:estado')]
+      ]) }
+    )
+  })
+
+  // ── ver:estado — estado inline desde cualquier mensaje ──────────────────
+  bot.action('ver:estado', async (ctx) => {
+    await ctx.answerCbQuery()
+    const sb = getSupabase()
+    const { data: user } = await sb
+      .from('remaju_users')
+      .select('*, remaju_filters(*)')
+      .eq('telegram_id', ctx.from.id)
+      .single()
+
+    if (!user) return ctx.answerCbQuery('Usa /start primero')
+
+    const rawF = user.remaju_filters
+    const f = rawF ? (Array.isArray(rawF) ? rawF[0] : rawF) : null
+    const filterInfo = f
+      ? `💰 Precio: <b>$${(f.min_price_usd || 0).toLocaleString()} – $${(f.max_price_usd || 90000).toLocaleString()} USD</b>\n` +
+        `🏠 Tipos: ${(f.property_types || []).join(', ')}\n` +
+        `📍 Distritos: ${f.districts?.length ? f.districts.slice(0,3).join(', ') + (f.districts.length > 3 ? ` (+${f.districts.length - 3} más)` : '') : 'Todo el Perú'}`
+      : 'Sin filtros configurados'
+
+    const now3 = new Date()
+    const endsAt3 = user.subscription_status === 'active' ? user.subscription_ends_at : user.trial_ends_at
+    const daysLeft3 = endsAt3 ? Math.ceil((new Date(endsAt3) - now3) / 86400000) : null
+    const showRenew3 = daysLeft3 !== null && daysLeft3 <= 7
+
+    const buttons3 = [[Markup.button.callback('⚙️ Cambiar filtros', 'filt:menu')]]
+    if (showRenew3 || user.subscription_status === 'expired') {
+      buttons3.push([Markup.button.callback('💳 Renovar acceso', 'sub:pago')])
+    }
+
+    const texto = `📊 <b>Tu cuenta REMAJU Monitor</b>\n\n${formatSubscriptionLine(user)}\n\n<b>Filtros:</b>\n${filterInfo}`
+    try {
+      await ctx.editMessageText(texto, { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons3) })
+    } catch (e) {
+      if (!e.message?.includes('message is not modified')) await ctx.replyWithHTML(texto, Markup.inlineKeyboard(buttons3))
+    }
+  })
+
+  // ── sub:pago — info de pago inline ──────────────────────────────────────
+  bot.action('sub:pago', async (ctx) => {
+    await ctx.answerCbQuery()
+    const texto =
+      `💳 <b>Plan REMAJU Monitor</b>\n\n` +
+      `<b>S/ ${PRICE_SOLES}/mes</b>\n\n` +
+      `✅ Alertas diarias a las 7AM\n` +
+      `✅ Filtros por precio, tipo y distrito\n` +
+      `✅ Sin publicidad ni límites\n\n` +
+      `━━━━━━━━━━━━━━━━━━\n` +
+      `📱 <b>Yape / Plin:</b> ${YAPE_NUM}\n` +
+      `   A nombre de: <b>${ADMIN_NAME}</b>\n\n` +
+      `Envía tu captura del comprobante aquí mismo — te activamos en menos de 24h.`
+    const kb = Markup.inlineKeyboard([[Markup.button.callback('📸 Ya pagué — enviar comprobante', 'sub:comprobante')]])
+    try {
+      await ctx.editMessageText(texto, { parse_mode: 'HTML', ...kb })
+    } catch (e) {
+      if (!e.message?.includes('message is not modified')) await ctx.replyWithHTML(texto, kb)
+    }
+  })
+
+  // ── sub:comprobante — instrucciones para enviar foto ─────────────────────
+  bot.action('sub:comprobante', async (ctx) => {
+    await ctx.answerCbQuery()
+    await ctx.editMessageText(
+      `📸 <b>Enviar comprobante</b>\n\n` +
+      `Adjunta aquí la captura de pantalla del Yape o Plin como <b>foto</b>.\n\n` +
+      `Te confirmamos en menos de 24h. ¡Gracias!`,
       { parse_mode: 'HTML' }
     )
   })
